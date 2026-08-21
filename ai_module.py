@@ -1,31 +1,39 @@
 """
 ai_module.py
 인포 브릿지 - AI 연동 모듈 (+ 번역 모듈 통합)
+[Google AI Studio / Gemini API 버전]
 
 역할:
-1. 전처리된 상품 이미지를 Claude API(비전 기능)로 전송
+1. 전처리된 상품 이미지를 Gemini API(비전 기능)로 전송
 2. 상품명, 라벨/성분 텍스트, 사용법, 관련 규정(수화물 등)을 인식
 3. 사용자가 선택한 언어로 바로 결과를 받음 (번역 모듈 역할 겸용)
 
 사용 전 설치 필요:
-    pip install anthropic
+    pip install google-genai pillow
 
-API 키 설정 (라즈베리파이 터미널에서, 매번 새 터미널 열 때마다 필요):
-    export ANTHROPIC_API_KEY="여기에_발급받은_키_입력"
+API 키 발급:
+    https://aistudio.google.com -> Get API key -> Create API key
 
-    또는 영구 설정하려면 ~/.bashrc 맨 아래에 위 줄을 추가하고:
+API 키 설정 (라즈베리파이 터미널에서):
+    export GEMINI_API_KEY="여기에_발급받은_키_입력"
+
+    영구 설정하려면 ~/.bashrc 맨 아래에 위 줄을 추가:
+    echo 'export GEMINI_API_KEY="키값"' >> ~/.bashrc
     source ~/.bashrc
 """
 
-import base64
 import json
 import os
-from anthropic import Anthropic
+
+from PIL import Image
+from google import genai
 
 # ---- 설정값 ----
-MODEL_NAME = "claude-sonnet-5"   # 속도/비용 균형이 좋은 모델. 정확도를 더 높이려면 "claude-opus-5"로 교체 가능
+# 참고: gemini-2.5-flash는 속도/비용/무료 등급 balance가 좋은 모델입니다.
+# 나중에 더 정확한 인식이 필요하면 "gemini-2.5-pro" 등으로 교체 가능합니다.
+MODEL_NAME = "gemini-2.5-flash"
 
-# 언어 코드 -> 사람이 읽는 이름 매핑 (로터리 엔코더로 선택할 언어 목록과 맞추면 됨)
+# 언어 코드 -> 사람이 읽는 이름 매핑 (input_module.py의 LANGUAGE_LABELS와 맞춰야 함)
 LANGUAGE_NAMES = {
     "ko": "한국어",
     "en": "English",
@@ -33,10 +41,21 @@ LANGUAGE_NAMES = {
     "zh": "中文",
 }
 
+_client = None  # Gemini 클라이언트 (지연 초기화)
 
-def _load_image_as_base64(image_path: str) -> str:
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+
+def _get_client() -> genai.Client:
+    """Gemini 클라이언트를 준비한다. 처음 호출될 때만 생성."""
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY 환경변수가 설정되지 않았습니다. "
+                "터미널에서 export GEMINI_API_KEY='키값' 을 먼저 실행하세요."
+            )
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def _build_prompt(target_language_code: str) -> str:
@@ -64,50 +83,17 @@ label_text_summary에 "이미지를 다시 촬영해 주세요"라고 안내하�
 
 def recognize_and_translate(image_path: str, target_language_code: str = "ko") -> dict:
     """
-    전처리된 이미지를 Claude API로 보내 상품 정보를 인식하고,
+    전처리된 이미지를 Gemini API로 보내 상품 정보를 인식하고,
     target_language_code 언어로 번역된 결과를 dict로 반환한다.
-
-    반환 예시:
-    {
-        "product_name": "...",
-        "category": "...",
-        "label_text_summary": "...",
-        "usage": "...",
-        "travel_regulations": "...",
-        "confidence": "..."
-    }
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다. "
-            "터미널에서 export ANTHROPIC_API_KEY='키값' 을 먼저 실행하세요."
-        )
-
-    client = Anthropic(api_key=api_key)
-    image_b64 = _load_image_as_base64(image_path)
-    prompt = _build_prompt(target_language_code)
-
     try:
-        response = client.messages.create(
+        client = _get_client()
+        image = Image.open(image_path)
+        prompt = _build_prompt(target_language_code)
+
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_b64,
-                            },
-                        },
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ],
+            contents=[image, prompt],
         )
     except Exception as e:
         print(f"[AI 연동 모듈] API 호출 실패: {e}")
@@ -120,9 +106,7 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
             "confidence": "낮음",
         }
 
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    ).strip()
+    raw_text = (response.text or "").strip()
 
     # 혹시 모델이 코드블록으로 감싸서 응답한 경우 제거
     if raw_text.startswith("```"):
