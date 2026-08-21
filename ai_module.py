@@ -29,9 +29,9 @@ from PIL import Image
 from google import genai
 
 # ---- 설정값 ----
-# 참고: gemini-2.5-flash는 속도/비용/무료 등급 balance가 좋은 모델입니다.
-# 나중에 더 정확한 인식이 필요하면 "gemini-2.5-pro" 등으로 교체 가능합니다.
-MODEL_NAME = "gemini-2.5-flash"
+# 참고: gemini-3.6-flash는 속도/비용/무료 등급 balance가 좋은 최신 모델입니다.
+# 나중에 더 정확한 인식이 필요하면 "gemini-3.1-pro" 등으로 교체 가능합니다.
+MODEL_NAME = "gemini-3.6-flash"
 
 # 언어 코드 -> 사람이 읽는 이름 매핑 (input_module.py의 LANGUAGE_LABELS와 맞춰야 함)
 LANGUAGE_NAMES = {
