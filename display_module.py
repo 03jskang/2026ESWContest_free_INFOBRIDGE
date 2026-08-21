@@ -15,7 +15,16 @@ display_module.py
     sudo apt install -y python3-pygame
 """
 
+import os
+
+# LCD로 출력하므로 실제 모니터(HDMI) 없이도 pygame이 동작하도록
+# "화면 없는(headless)" SDL 드라이버를 사용한다.
+# 만약 디버깅용으로 HDMI 모니터에도 같이 띄우고 싶다면 아래 줄을 주석 처리하면 된다.
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
 import pygame
+from PIL import Image
+import ili9486_driver
 
 # ---- 화면 설정 ----
 SCREEN_WIDTH = 480
@@ -63,6 +72,19 @@ def _draw_button(rect: tuple, label: str):
     _screen.blit(label_surf, label_rect)
 
 
+def _flip_to_lcd():
+    """
+    pygame이 그린 화면(_screen)을 그대로 캡처해서
+    실제 3.5인치 SPI LCD에 전송한다.
+    기존 pygame.display.flip() 자리를 대신 호출하면 된다.
+    """
+    pygame.display.flip()  # pygame 내부적으로도 최신 상태 유지 (디버깅/이벤트 처리용)
+
+    raw = pygame.image.tostring(_screen, "RGB")
+    img = Image.frombytes("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), raw)
+    ili9486_driver.display_image(img)
+
+
 def is_point_in_rect(point: tuple, rect: tuple) -> bool:
     """터치/클릭 좌표가 버튼 영역 안에 있는지 판정"""
     px, py = point
@@ -77,6 +99,9 @@ def init_display():
     pygame.init()
     _screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("인포 브릿지")
+
+    # 실제 3.5인치 LCD (SPI, ILI9486) 초기화
+    ili9486_driver.init()
 
     # 한글 폰트: 라즈베리파이 OS 기본 탑재 나눔고딕 계열 시도, 없으면 시스템 기본 폰트로 대체
     font_path = None
@@ -140,7 +165,7 @@ def draw_waiting_screen(language_label: str):
 
     _draw_button(CAPTURE_BUTTON_RECT, "촬영하기")
 
-    pygame.display.flip()
+    _flip_to_lcd()
 
 
 def draw_loading_screen(message: str = "인식 중입니다..."):
@@ -153,7 +178,7 @@ def draw_loading_screen(message: str = "인식 중입니다..."):
     hint_surf = _font_hint.render("잠시만 기다려 주세요", True, COLOR_MUTED)
     _screen.blit(hint_surf, (20, 180))
 
-    pygame.display.flip()
+    _flip_to_lcd()
 
 
 def draw_result_screen(result: dict, scroll_offset: int = 0):
@@ -194,7 +219,7 @@ def draw_result_screen(result: dict, scroll_offset: int = 0):
     pygame.draw.rect(_screen, COLOR_BG, (0, SCREEN_HEIGHT - 64, SCREEN_WIDTH, 64))
     _draw_button(RETAKE_BUTTON_RECT, "다시 촬영")
 
-    pygame.display.flip()
+    _flip_to_lcd()
 
     # 스크롤 가능한 전체 콘텐츠 높이를 반환 (스크롤 한계 계산용)
     return y + scroll_offset
