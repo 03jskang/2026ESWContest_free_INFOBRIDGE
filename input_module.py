@@ -1,6 +1,6 @@
 """
 input_module.py
-인포 브릿지 - 입력 처리 모듈
+인포 브릿지 - 입력 처리 모듈 (RPi.GPIO 버전)
 
 역할:
 1. 로터리 엔코더 회전(A, B) 감지 -> 언어 선택 변경
@@ -13,11 +13,17 @@ input_module.py
     엔코더 S1(버튼)                   -> GPIO 17
     엔코더 S2(버튼)                   -> 라즈베리파이 GND
 
+주의:
+    display_module.py(LCD 드라이버)가 RPi.GPIO를 사용하므로,
+    같은 프로세스에서 gpiozero(lgpio)를 함께 쓰면 "GPIO busy" 충돌이 납니다.
+    그래서 이 모듈도 RPi.GPIO로 통일했습니다.
+
 사용 전 설치 필요:
-    pip install gpiozero
+    pip install RPi.GPIO
 """
 
-from gpiozero import Button, DigitalInputDevice
+import RPi.GPIO as GPIO
+import time
 
 # ---- 설정값 (실제 배선한 GPIO 번호) ----
 ENCODER_PIN_A = 27
@@ -25,7 +31,6 @@ ENCODER_PIN_B = 22
 BUTTON_PIN = 17
 
 # 로터리 엔코더로 선택할 수 있는 언어 목록
-# ai_module.py의 LANGUAGE_NAMES 키와 맞춰야 함
 LANGUAGES = ["ko", "en", "ja", "zh"]
 LANGUAGE_LABELS = {
     "ko": "한국어",
@@ -34,69 +39,70 @@ LANGUAGE_LABELS = {
     "zh": "中文",
 }
 
-# 현재 선택된 언어의 인덱스 (전역 상태)
 _current_language_index = 0
+
+# 버튼 디바운스용 (짧은 시간 내 중복 눌림 방지)
+_last_button_time = 0
+_BUTTON_DEBOUNCE_SEC = 0.2
+
+_last_state_a = None
+_on_clockwise_cb = None
+_on_counterclockwise_cb = None
+_on_button_pressed_cb = None
 
 
 def get_current_language() -> str:
-    """현재 선택된 언어 코드를 반환 (예: 'ko')"""
     return LANGUAGES[_current_language_index]
 
 
 def get_current_language_label() -> str:
-    """현재 선택된 언어의 사람이 읽는 이름을 반환 (예: '한국어')"""
     return LANGUAGE_LABELS[get_current_language()]
 
 
-class RotaryEncoder:
-    """
-    2상(A, B) 로터리 엔코더의 회전 방향을 감지하는 클래스.
-    A핀이 먼저 떨어지면 시계방향(CW), B핀이 먼저 떨어지면 반시계방향(CCW)으로 판별.
-    """
-
-    def __init__(self, pin_a: int, pin_b: int, on_clockwise=None, on_counterclockwise=None):
-        self._on_clockwise = on_clockwise
-        self._on_counterclockwise = on_counterclockwise
-
-        # pull_up=True: 평소 HIGH, 눌리거나 접점이 붙으면 LOW로 떨어짐
-        self._input_a = DigitalInputDevice(pin_a, pull_up=True)
-        self._input_b = DigitalInputDevice(pin_b, pull_up=True)
-
-        self._last_state_a = self._input_a.value
-
-        # A핀 상태가 바뀔 때마다 방향 판별 실행
-        self._input_a.when_activated = self._decode_rotation
-        self._input_a.when_deactivated = self._decode_rotation
-
-    def _decode_rotation(self):
-        state_a = self._input_a.value
-        state_b = self._input_b.value
-
-        if state_a != self._last_state_a:
-            if state_a != state_b:
-                # 시계방향 회전
-                if self._on_clockwise:
-                    self._on_clockwise()
-            else:
-                # 반시계방향 회전
-                if self._on_counterclockwise:
-                    self._on_counterclockwise()
-
-        self._last_state_a = state_a
-
-
 def _handle_clockwise():
-    """다이얼을 오른쪽(시계방향)으로 돌렸을 때: 다음 언어로 이동"""
     global _current_language_index
     _current_language_index = (_current_language_index + 1) % len(LANGUAGES)
     print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}")
 
 
 def _handle_counterclockwise():
-    """다이얼을 왼쪽(반시계방향)으로 돌렸을 때: 이전 언어로 이동"""
     global _current_language_index
     _current_language_index = (_current_language_index - 1) % len(LANGUAGES)
     print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}")
+
+
+def _decode_rotation(channel):
+    """A핀 상태 변화 인터럽트 콜백. B핀과 비교해서 회전 방향 판별."""
+    global _last_state_a
+
+    state_a = GPIO.input(ENCODER_PIN_A)
+    state_b = GPIO.input(ENCODER_PIN_B)
+
+    if _last_state_a is None:
+        _last_state_a = state_a
+        return
+
+    if state_a != _last_state_a:
+        if state_a != state_b:
+            if _on_clockwise_cb:
+                _on_clockwise_cb()
+        else:
+            if _on_counterclockwise_cb:
+                _on_counterclockwise_cb()
+
+    _last_state_a = state_a
+
+
+def _decode_button(channel):
+    """버튼 눌림 인터럽트 콜백. 디바운스 처리 포함."""
+    global _last_button_time
+    now = time.time()
+    if now - _last_button_time < _BUTTON_DEBOUNCE_SEC:
+        return
+    _last_button_time = now
+
+    if _on_button_pressed_cb:
+        _on_button_pressed_cb()
 
 
 def setup_input_handlers(on_button_pressed):
@@ -107,29 +113,37 @@ def setup_input_handlers(on_button_pressed):
         on_button_pressed: 버튼을 눌렀을 때 실행할 콜백 함수 (main.py에서 전달)
 
     Returns:
-        (encoder, button) 객체. 프로그램이 끝날 때까지 참조를 유지해야 콜백이 계속 동작함.
+        None (RPi.GPIO는 콜백을 내부에서 계속 유지하므로 별도 참조 유지 불필요)
     """
-    encoder = RotaryEncoder(
-        ENCODER_PIN_A,
-        ENCODER_PIN_B,
-        on_clockwise=_handle_clockwise,
-        on_counterclockwise=_handle_counterclockwise,
-    )
+    global _on_clockwise_cb, _on_counterclockwise_cb, _on_button_pressed_cb, _last_state_a
 
-    button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.2)
-    button.when_pressed = on_button_pressed
+    _on_clockwise_cb = _handle_clockwise
+    _on_counterclockwise_cb = _handle_counterclockwise
+    _on_button_pressed_cb = on_button_pressed
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+
+    GPIO.setup(ENCODER_PIN_A, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(ENCODER_PIN_B, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    _last_state_a = GPIO.input(ENCODER_PIN_A)
+
+    GPIO.add_event_detect(ENCODER_PIN_A, GPIO.BOTH, callback=_decode_rotation, bouncetime=5)
+    GPIO.add_event_detect(BUTTON_PIN, GPIO.FALLING, callback=_decode_button, bouncetime=200)
 
     print(f"[입력 모듈] 준비 완료. 현재 언어: {get_current_language_label()}")
-    return encoder, button
 
 
 if __name__ == "__main__":
-    # 단독 테스트: 다이얼 돌리면 언어가 바뀌고, 버튼 누르면 메시지 출력
-    from signal import pause
-
     def _test_button_pressed():
         print(f"[테스트] 버튼 눌림! 현재 언어: {get_current_language_label()}")
 
     setup_input_handlers(_test_button_pressed)
     print("[테스트] 다이얼을 돌리거나 버튼을 눌러보세요. 종료: Ctrl+C")
-    pause()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        GPIO.cleanup()
