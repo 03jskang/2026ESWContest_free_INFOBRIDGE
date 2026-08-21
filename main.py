@@ -167,8 +167,50 @@ def main():
     clock = pygame.time.Clock()
     running = True
 
+    # 스와이프 제스처 감지용 (터치 다운 시작 좌표 기록)
+    swipe_start_pos = None
+    SWIPE_MIN_DISTANCE = 40  # 이 픽셀 이상 이동해야 스와이프로 인정
+
     while running:
-        running = display.process_events()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+            elif event.type == pygame.KEYDOWN:
+                # ---- 임시: 다이얼 배선 전 키보드 테스트용 ----
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.key == pygame.K_RIGHT:
+                    clockwise_combined()
+                elif event.key == pygame.K_LEFT:
+                    counterclockwise_combined()
+                elif event.key == pygame.K_SPACE:
+                    on_button_pressed()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                # 터치스크린도 pygame에서는 마우스 이벤트로 들어옴
+                swipe_start_pos = event.pos
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                touch_pos = event.pos
+
+                with _state_lock:
+                    current = _app_state
+
+                # 1. 버튼 영역 터치 판정 (촬영하기 / 다시 촬영)
+                if current == "waiting" and display.is_point_in_rect(touch_pos, display.CAPTURE_BUTTON_RECT):
+                    on_button_pressed()
+                elif current == "result" and display.is_point_in_rect(touch_pos, display.RETAKE_BUTTON_RECT):
+                    on_button_pressed()
+                # 2. 버튼이 아니면 스와이프(좌우 드래그) 판정 -> 언어 변경 (대기 화면에서만)
+                elif swipe_start_pos is not None and current == "waiting":
+                    dx = touch_pos[0] - swipe_start_pos[0]
+                    if dx > SWIPE_MIN_DISTANCE:
+                        counterclockwise_combined()  # 오른쪽으로 스와이프 -> 이전 언어
+                    elif dx < -SWIPE_MIN_DISTANCE:
+                        clockwise_combined()          # 왼쪽으로 스와이프 -> 다음 언어
+
+                swipe_start_pos = None
 
         with _state_lock:
             current_state = _app_state
