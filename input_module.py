@@ -18,6 +18,7 @@ input_module.py
 """
 
 from threading import Lock
+import time
 
 import RPi.GPIO as GPIO
 
@@ -62,29 +63,20 @@ class RotaryEncoder:
         self._pin_a = pin_a
         self._pin_b = pin_b
 
-        try:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setwarnings(False)
-            GPIO.setup(pin_a, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.setup(pin_b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+        GPIO.setup(pin_a, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(pin_b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-            self._state_lock = Lock()
-            self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
-            self._step_count = 0
+        self._state_lock = Lock()
+        self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
+        self._step_count = 0
 
-            GPIO.add_event_detect(
-                pin_a, GPIO.BOTH, callback=self._decode_rotation, bouncetime=2
-            )
-            GPIO.add_event_detect(
-                pin_b, GPIO.BOTH, callback=self._decode_rotation, bouncetime=2
-            )
-        except Exception:
-            GPIO.remove_event_detect(pin_a)
-            GPIO.remove_event_detect(pin_b)
-            GPIO.cleanup([pin_a, pin_b])
-            raise
+    def poll(self):
+        """메인 루프에서 호출해 GPIO edge detection 없이 회전을 읽는다."""
+        self._decode_rotation()
 
-    def _decode_rotation(self, _channel):
+    def _decode_rotation(self):
         with self._state_lock:
             state = (GPIO.input(self._pin_a) << 1) | GPIO.input(self._pin_b)
             transition = (self._last_state << 2) | state
@@ -113,8 +105,6 @@ class RotaryEncoder:
             self._on_counterclockwise()
 
     def close(self):
-        GPIO.remove_event_detect(self._pin_a)
-        GPIO.remove_event_detect(self._pin_b)
         GPIO.cleanup([self._pin_a, self._pin_b])
 
 
@@ -124,20 +114,27 @@ class Button:
     def __init__(self, pin: int, pull_up=True, bounce_time=0.2):
         self._pin = pin
         self.when_pressed = None
+        self._pull_up = pull_up
+        self._last_value = GPIO.HIGH if pull_up else GPIO.LOW
+        self._last_pressed_at = 0.0
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP if pull_up else GPIO.PUD_DOWN)
-        GPIO.add_event_detect(
-            pin,
-            GPIO.FALLING if pull_up else GPIO.RISING,
-            callback=self._pressed,
-            bouncetime=int(bounce_time * 1000),
-        )
+        self._bounce_time = bounce_time
 
-    def _pressed(self, _channel):
+    def poll(self):
+        value = GPIO.input(self._pin)
+        pressed = value == (GPIO.LOW if self._pull_up else GPIO.HIGH)
+        was_pressed = self._last_value == (GPIO.LOW if self._pull_up else GPIO.HIGH)
+        now = time.monotonic()
+        if pressed and not was_pressed and now - self._last_pressed_at >= self._bounce_time:
+            self._last_pressed_at = now
+            self._pressed()
+        self._last_value = value
+
+    def _pressed(self):
         if self.when_pressed:
             self.when_pressed()
 
     def close(self):
-        GPIO.remove_event_detect(self._pin)
         GPIO.cleanup(self._pin)
 
 
