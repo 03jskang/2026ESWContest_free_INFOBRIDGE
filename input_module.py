@@ -17,6 +17,8 @@ input_module.py
     pip install gpiozero
 """
 
+from threading import Lock
+
 from gpiozero import Button, DigitalInputDevice
 
 # ---- 설정값 (실제 배선한 GPIO 번호) ----
@@ -62,46 +64,38 @@ class RotaryEncoder:
         self._input_a = DigitalInputDevice(pin_a, pull_up=True)
         self._input_b = DigitalInputDevice(pin_b, pull_up=True)
 
-        self._last_state = (self._input_a.value << 1) | self._input_b.value
-        self._step_count = 0
+        self._state_lock = Lock()
 
-        # 두 핀의 모든 상태 변화를 읽어 빠른 회전에서도 단계를 놓치지 않는다.
-        self._input_a.when_activated = self._decode_rotation
+        # A상의 하강 에지 한 번을 한 칸으로 사용해 반응성을 우선한다.
         self._input_a.when_deactivated = self._decode_rotation
-        self._input_b.when_activated = self._decode_rotation
-        self._input_b.when_deactivated = self._decode_rotation
 
     def _decode_rotation(self):
-        state = (self._input_a.value << 1) | self._input_b.value
-        transition = (self._last_state << 2) | state
-        direction = {
-            0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
-            0b0010: -1, 0b1011: -1, 0b1101: -1, 0b0100: -1,
-        }.get(transition, 0)
-        self._step_count += direction
-        self._last_state = state
+        with self._state_lock:
+            clockwise = bool(self._input_b.value)
+            print(
+                f"[엔코더] A 하강 감지, B={int(self._input_b.value)}, "
+                f"방향={'CW' if clockwise else 'CCW'}",
+                flush=True,
+            )
 
-        # 일반 엔코더 한 칸은 4개의 유효 전이로 구성된다.
-        if abs(self._step_count) >= 4:
-            if self._step_count > 0 and self._on_clockwise:
-                self._on_clockwise()
-            elif self._step_count < 0 and self._on_counterclockwise:
-                self._on_counterclockwise()
-            self._step_count = 0
+        if clockwise and self._on_clockwise:
+            self._on_clockwise()
+        elif not clockwise and self._on_counterclockwise:
+            self._on_counterclockwise()
 
 
 def _handle_clockwise():
     """다이얼을 오른쪽(시계방향)으로 돌렸을 때: 다음 언어로 이동"""
     global _current_language_index
     _current_language_index = (_current_language_index + 1) % len(LANGUAGES)
-    print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}")
+    print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}", flush=True)
 
 
 def _handle_counterclockwise():
     """다이얼을 왼쪽(반시계방향)으로 돌렸을 때: 이전 언어로 이동"""
     global _current_language_index
     _current_language_index = (_current_language_index - 1) % len(LANGUAGES)
-    print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}")
+    print(f"[입력 모듈] 언어 선택 -> {get_current_language_label()}", flush=True)
 
 
 def setup_input_handlers(on_button_pressed):

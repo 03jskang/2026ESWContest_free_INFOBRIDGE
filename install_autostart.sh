@@ -33,7 +33,8 @@ Type=simple
 User=${SERVICE_USER}
 WorkingDirectory=${PROJECT_DIR}
 EnvironmentFile=-${ENV_FILE}
-ExecStart=${PYTHON_BIN} ${PROJECT_DIR}/main.py
+Environment=PYTHONUNBUFFERED=1
+ExecStart=${PYTHON_BIN} -u ${PROJECT_DIR}/main.py
 Restart=on-failure
 RestartSec=3
 
