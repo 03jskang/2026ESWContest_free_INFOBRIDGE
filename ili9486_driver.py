@@ -104,6 +104,9 @@ def init():
     # 이 패널은 BGR 순서가 기본이다. RGB 패널이면 LCD_COLOR_ORDER=RGB를 사용한다.
     send_data(MADCTL_COLOR)
 
+    # 색상 반전 상태를 명시적으로 해제한다. 반전 상태에서는 파랑이 노랑으로 보인다.
+    send_cmd(0x20)
+
     send_cmd(0x11)
     time.sleep(0.15)
     send_cmd(0x29)
