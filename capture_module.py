@@ -13,6 +13,7 @@ from picamera2 import Picamera2
 PREVIEW_SIZE = (480, 320)
 CAPTURE_PATH = Path("captured.jpg")
 PROCESSED_PATH = Path("captured_processed.jpg")
+FLIP_CAMERA_VERTICAL = True
 
 _camera = None
 _latest_frame = None
@@ -39,6 +40,8 @@ def _update_preview_frame():
     """카메라의 최신 프레임을 LCD 렌더링용 PIL 이미지로 저장한다."""
     frame = _ensure_camera().capture_array("main")
     image = Image.fromarray(frame).convert("RGB")
+    if FLIP_CAMERA_VERTICAL:
+        image = ImageOps.flip(image)
     with _frame_lock:
         global _latest_frame
         _latest_frame = image
@@ -65,7 +68,10 @@ def capture_and_preprocess(preview_seconds: float = 2.0) -> str:
     camera.close()
 
     with Image.open(CAPTURE_PATH) as image:
-        processed = ImageOps.fit(image.convert("RGB"), PREVIEW_SIZE)
+        image = image.convert("RGB")
+        if FLIP_CAMERA_VERTICAL:
+            image = ImageOps.flip(image)
+        processed = ImageOps.fit(image, PREVIEW_SIZE)
         processed.save(PROCESSED_PATH, quality=95)
 
     _camera = None

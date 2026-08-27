@@ -102,6 +102,10 @@ sudo bash install_autostart.sh
 그러면 전원이 켜지고 네트워크가 준비된 뒤 `main.py`가 자동 실행되어 LCD가
 초기화됩니다. Gemini API 키는 서비스 사용자 기준으로 생성된 파일에 저장합니다.
 
+카메라 영상은 상하 반전 상태로 표시하고, Gemini에 보내는 촬영 이미지에도 같은
+반전을 적용합니다. 방향을 원래대로 바꾸려면 `capture_module.py`의
+`FLIP_CAMERA_VERTICAL = False`로 설정합니다.
+
 처음 설치할 때는 서비스 사용자가 GPIO와 카메라 장치에 접근할 수 있도록 다음도
 한 번 실행합니다.
 
