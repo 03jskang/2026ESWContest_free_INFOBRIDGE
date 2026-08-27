@@ -24,14 +24,18 @@ API 키 설정 (라즈베리파이 터미널에서):
 
 import json
 import os
+import time
 
 from PIL import Image
 from google import genai
+from google.genai import types
 
 # ---- 설정값 ----
 # 참고: gemini-3.6-flash는 속도/비용/무료 등급 balance가 좋은 최신 모델입니다.
 # 나중에 더 정확한 인식이 필요하면 "gemini-3.1-pro" 등으로 교체 가능합니다.
 MODEL_NAME = "gemini-3.6-flash"
+API_TIMEOUT_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "30000"))
+API_RETRIES = 2
 
 # 언어 코드 -> 사람이 읽는 이름 매핑 (input_module.py의 LANGUAGE_LABELS와 맞춰야 함)
 LANGUAGE_NAMES = {
@@ -54,7 +58,10 @@ def _get_client() -> genai.Client:
                 "GEMINI_API_KEY 환경변수가 설정되지 않았습니다. "
                 "터미널에서 export GEMINI_API_KEY='키값' 을 먼저 실행하세요."
             )
-        _client = genai.Client(api_key=api_key)
+        _client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=API_TIMEOUT_MS),
+        )
     return _client
 
 
@@ -88,15 +95,26 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
     """
     try:
         client = _get_client()
-        image = Image.open(image_path)
-        prompt = _build_prompt(target_language_code)
-
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=[image, prompt],
-        )
+        with Image.open(image_path) as image:
+            prompt = _build_prompt(target_language_code)
+            for attempt in range(API_RETRIES + 1):
+                try:
+                    response = client.models.generate_content(
+                        model=MODEL_NAME,
+                        contents=[image, prompt],
+                    )
+                    break
+                except Exception as error:
+                    if attempt == API_RETRIES:
+                        raise
+                    print(
+                        f"[AI 연동 모듈] API 재시도 {attempt + 1}/{API_RETRIES}: "
+                        f"{error}",
+                        flush=True,
+                    )
+                    time.sleep(2 ** attempt)
     except Exception as e:
-        print(f"[AI 연동 모듈] API 호출 실패: {e}")
+        print(f"[AI 연동 모듈] API 호출 실패: {e}", flush=True)
         return {
             "product_name": "",
             "category": "",

@@ -105,11 +105,10 @@ def init():
     # 이 패널은 BGR 순서가 기본이다. RGB 패널이면 LCD_COLOR_ORDER=RGB를 사용한다.
     send_data(MADCTL_COLOR)
 
-    # 색상 반전 상태를 명시적으로 해제한다. 반전 상태에서는 파랑이 노랑으로 보인다.
-    send_cmd(0x20)
-
     send_cmd(0x11)
     time.sleep(0.15)
+    # 패널이 반전/부분 표시 모드에 남지 않도록 일반 표시 모드로 복구한다.
+    send_cmd(0x13)
     send_cmd(0x29)
     time.sleep(0.05)
 
@@ -123,6 +122,9 @@ def set_window(x0, y0, x1, y1):
 def display_image(img):
     img = img.resize((WIDTH, HEIGHT)).convert("RGB")
     pixels = img.load()
+    # 화면 전환 뒤 표시가 꺼진 일부 패널을 다시 일반 표시 상태로 복구한다.
+    send_cmd(0x13)
+    send_cmd(0x29)
     set_window(0, 0, WIDTH - 1, HEIGHT - 1)
 
     buf = []

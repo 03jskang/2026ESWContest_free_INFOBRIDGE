@@ -28,6 +28,7 @@ ENCODER_PIN_B = 22
 BUTTON_PIN = 17
 ENCODER_STEPS_PER_EVENT = 2
 ENCODER_POLL_INTERVAL = 0.001
+ENCODER_DEBOUNCE_SECONDS = 0.004
 
 # 로터리 엔코더로 선택할 수 있는 언어 목록
 # ai_module.py의 LANGUAGE_NAMES 키와 맞춰야 함
@@ -73,6 +74,8 @@ class RotaryEncoder:
         self._state_lock = Lock()
         self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
         self._last_logged_state = self._last_state
+        self._candidate_state = self._last_state
+        self._candidate_since = time.monotonic()
         self._step_count = 0
         self._pending_direction = 0
         self._stop_event = Event()
@@ -96,6 +99,15 @@ class RotaryEncoder:
     def _decode_rotation(self):
         with self._state_lock:
             state = (GPIO.input(self._pin_a) << 1) | GPIO.input(self._pin_b)
+            now = time.monotonic()
+            if state != self._candidate_state:
+                self._candidate_state = state
+                self._candidate_since = now
+                return
+            if now - self._candidate_since < ENCODER_DEBOUNCE_SECONDS:
+                return
+            if state == self._last_state:
+                return
             if state != self._last_logged_state:
                 print(f"[엔코더] GPIO 상태 변화: {self._last_logged_state:02b}->{state:02b}", flush=True)
                 self._last_logged_state = state

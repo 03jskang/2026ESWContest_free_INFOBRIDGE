@@ -118,9 +118,14 @@ sudo usermod -aG gpio,video $USER
 ```bash
 nano ~/.config/info-bridge.env
 GEMINI_API_KEY=발급받은_키
+GEMINI_TIMEOUT_MS=30000
 # 패널에 따라 RGB 또는 BGR 선택
 LCD_COLOR_ORDER=BGR
 ```
+
+Gemini 응답이 지연되면 30초 후 최대 2회 재시도하고, 계속 실패하면 네트워크
+오류 안내를 결과 화면에 표시합니다. `GEMINI_TIMEOUT_MS` 값으로 제한시간을
+조절할 수 있습니다.
 
 서비스 확인 및 로그:
 
