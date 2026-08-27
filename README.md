@@ -91,5 +91,30 @@ Gemini가 인식한 상품명과 `product_name`을 비교해 일치하는 행을
 위치/설명을 결과 화면에 표시합니다. 다른 파일을 사용하려면 Raspberry Pi에서
 `INVENTORY_CSV=/경로/파일.csv python3 main.py`처럼 실행합니다.
 
+## Raspberry Pi 부팅 자동 실행
+
+Raspberry Pi에서 프로젝트 폴더로 이동한 뒤 다음 명령을 한 번 실행합니다.
+
+```bash
+sudo bash install_autostart.sh
+```
+
+그러면 전원이 켜지고 네트워크가 준비된 뒤 `main.py`가 자동 실행되어 LCD가
+초기화됩니다. Gemini API 키는 서비스 사용자 기준으로 생성된 파일에 저장합니다.
+
+```bash
+nano ~/.config/info-bridge.env
+GEMINI_API_KEY=발급받은_키
+```
+
+서비스 확인 및 로그:
+
+```bash
+sudo systemctl status info-bridge.service
+sudo journalctl -u info-bridge.service -f
+```
+
+서비스를 중지하려면 `sudo systemctl disable --now info-bridge.service`를 실행합니다.
+
 
 

@@ -62,27 +62,32 @@ class RotaryEncoder:
         self._input_a = DigitalInputDevice(pin_a, pull_up=True)
         self._input_b = DigitalInputDevice(pin_b, pull_up=True)
 
-        self._last_state_a = self._input_a.value
+        self._last_state = (self._input_a.value << 1) | self._input_b.value
+        self._step_count = 0
 
-        # A핀 상태가 바뀔 때마다 방향 판별 실행
+        # 두 핀의 모든 상태 변화를 읽어 빠른 회전에서도 단계를 놓치지 않는다.
         self._input_a.when_activated = self._decode_rotation
         self._input_a.when_deactivated = self._decode_rotation
+        self._input_b.when_activated = self._decode_rotation
+        self._input_b.when_deactivated = self._decode_rotation
 
     def _decode_rotation(self):
-        state_a = self._input_a.value
-        state_b = self._input_b.value
+        state = (self._input_a.value << 1) | self._input_b.value
+        transition = (self._last_state << 2) | state
+        direction = {
+            0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
+            0b0010: -1, 0b1011: -1, 0b1101: -1, 0b0100: -1,
+        }.get(transition, 0)
+        self._step_count += direction
+        self._last_state = state
 
-        if state_a != self._last_state_a:
-            if state_a != state_b:
-                # 시계방향 회전
-                if self._on_clockwise:
-                    self._on_clockwise()
-            else:
-                # 반시계방향 회전
-                if self._on_counterclockwise:
-                    self._on_counterclockwise()
-
-        self._last_state_a = state_a
+        # 일반 엔코더 한 칸은 4개의 유효 전이로 구성된다.
+        if abs(self._step_count) >= 4:
+            if self._step_count > 0 and self._on_clockwise:
+                self._on_clockwise()
+            elif self._step_count < 0 and self._on_counterclockwise:
+                self._on_counterclockwise()
+            self._step_count = 0
 
 
 def _handle_clockwise():

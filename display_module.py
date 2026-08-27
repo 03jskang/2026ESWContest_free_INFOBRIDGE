@@ -208,6 +208,7 @@ def draw_result_screen(result: dict, scroll_offset: int = 0):
     _screen.fill(COLOR_BG)
 
     content_width = SCREEN_WIDTH - 40  # 좌우 여백 20px씩
+    content_bottom = SCREEN_HEIGHT - 64
     y = 20 - scroll_offset
     line_height = 20
 
@@ -215,14 +216,14 @@ def draw_result_screen(result: dict, scroll_offset: int = 0):
         """라벨+내용을 그리고, 다음 섹션이 시작될 y좌표를 반환"""
         if not value:
             return y_pos
-        if y_pos > -line_height and y_pos < SCREEN_HEIGHT:
+        if y_pos > -line_height and y_pos < content_bottom:
             label_surf = _font_label.render(label, True, COLOR_LABEL)
             _screen.blit(label_surf, (20, y_pos))
         y_pos += line_height
 
         lines = _wrap_text(value, _font_body, content_width)
         for line in lines:
-            if y_pos > -line_height and y_pos < SCREEN_HEIGHT:
+            if y_pos > -line_height and y_pos < content_bottom:
                 line_surf = _font_body.render(line, True, COLOR_TEXT)
                 _screen.blit(line_surf, (20, y_pos))
             y_pos += line_height

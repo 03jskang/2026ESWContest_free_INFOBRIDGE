@@ -193,7 +193,8 @@ def main():
             display.draw_loading_screen("인식 중입니다...")
         elif current_state == "result":
             total_height = display.draw_result_screen(result, offset)
-            _max_scroll = max(0, total_height - display.SCREEN_HEIGHT + 40)
+            visible_height = display.SCREEN_HEIGHT - 64
+            _max_scroll = max(0, total_height - visible_height)
 
         clock.tick(display.FPS)
 
