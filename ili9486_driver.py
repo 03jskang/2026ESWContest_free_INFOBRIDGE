@@ -139,6 +139,13 @@ def display_image(img):
         spi.writebytes(buf)
     GPIO.output(CS, GPIO.HIGH)
 
+
+def close():
+    """LCD SPI와 이 드라이버가 사용하는 GPIO를 해제한다."""
+    if spi:
+        spi.close()
+    GPIO.cleanup([DC, RST, CS])
+
 if __name__ == "__main__":
     print("1. init 시작")
     init()

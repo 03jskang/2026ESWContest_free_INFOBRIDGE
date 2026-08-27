@@ -336,4 +336,5 @@ def process_events() -> bool:
 
 
 def quit_display():
+    ili9486_driver.close()
     pygame.quit()

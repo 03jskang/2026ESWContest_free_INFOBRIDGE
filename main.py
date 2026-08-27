@@ -155,62 +155,70 @@ def main():
 
     display.init_display()
 
-    encoder = RotaryEncoder(
-        ENCODER_PIN_A,
-        ENCODER_PIN_B,
-        on_clockwise=clockwise_combined,
-        on_counterclockwise=counterclockwise_combined,
-    )
-    button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.2)
-    button.when_pressed = on_button_pressed
+    encoder = None
+    button = None
+    try:
+        encoder = RotaryEncoder(
+            ENCODER_PIN_A,
+            ENCODER_PIN_B,
+            on_clockwise=clockwise_combined,
+            on_counterclockwise=counterclockwise_combined,
+        )
+        button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.2)
+        button.when_pressed = on_button_pressed
 
-    print("[메인] 준비 완료. 다이얼을 돌려 언어를 선택하고, 버튼을 눌러 촬영을 시작하세요.", flush=True)
-    print("[메인] 종료하려면 창을 닫거나 ESC를 누르세요.", flush=True)
+        print("[메인] 준비 완료. 다이얼을 돌려 언어를 선택하고, 버튼을 눌러 촬영을 시작하세요.", flush=True)
+        print("[메인] 종료하려면 창을 닫거나 ESC를 누르세요.", flush=True)
 
-    clock = pygame.time.Clock()
-    running = True
-    last_render_key = None
+        clock = pygame.time.Clock()
+        running = True
+        last_render_key = None
 
-    while running:
-        # ---- 임시: 엔코더 배선 확인/테스트용 키보드 입력 (실제 배선 후에도 같이 동작함) ----
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+        while running:
+            # ---- 임시: 엔코더 배선 확인/테스트용 키보드 입력 ----
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     running = False
-                elif event.key == pygame.K_RIGHT:
-                    clockwise_combined()
-                elif event.key == pygame.K_LEFT:
-                    counterclockwise_combined()
-                elif event.key == pygame.K_SPACE:
-                    on_button_pressed()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_RIGHT:
+                        clockwise_combined()
+                    elif event.key == pygame.K_LEFT:
+                        counterclockwise_combined()
+                    elif event.key == pygame.K_SPACE:
+                        on_button_pressed()
 
-        with _state_lock:
-            current_state = _app_state
-            result = _current_result
-            offset = _scroll_offset
+            with _state_lock:
+                current_state = _app_state
+                result = _current_result
+                offset = _scroll_offset
 
-        if current_state == "preview":
-            display.draw_camera_preview(get_preview_frame())
-        else:
-            language_label = get_current_language_label() if current_state == "waiting" else None
-            render_key = (current_state, language_label, id(result), offset)
-            if render_key != last_render_key:
-                if current_state == "waiting":
-                    display.draw_waiting_screen(language_label)
-                elif current_state == "loading":
-                    display.draw_loading_screen("인식 중입니다...")
-                elif current_state == "result":
-                    total_height = display.draw_result_screen(result, offset)
-                    visible_height = display.SCREEN_HEIGHT - 64
-                    _max_scroll = max(0, total_height - visible_height)
-                last_render_key = render_key
+            if current_state == "preview":
+                display.draw_camera_preview(get_preview_frame())
+            else:
+                language_label = get_current_language_label() if current_state == "waiting" else None
+                render_key = (current_state, language_label, id(result), offset)
+                if render_key != last_render_key:
+                    if current_state == "waiting":
+                        display.draw_waiting_screen(language_label)
+                    elif current_state == "loading":
+                        display.draw_loading_screen("인식 중입니다...")
+                    elif current_state == "result":
+                        total_height = display.draw_result_screen(result, offset)
+                        visible_height = display.SCREEN_HEIGHT - 64
+                        _max_scroll = max(0, total_height - visible_height)
+                    last_render_key = render_key
 
-        clock.tick(display.FPS)
-
-    close_camera()
-    display.quit_display()
+            clock.tick(display.FPS)
+    finally:
+        close_camera()
+        if button is not None:
+            button.close()
+        if encoder is not None:
+            encoder._input_a.close()
+            encoder._input_b.close()
+        display.quit_display()
 
 
 if __name__ == "__main__":
