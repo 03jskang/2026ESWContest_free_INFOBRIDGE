@@ -8,7 +8,7 @@ from PIL import Image
 DC = 24
 RST = 25
 CS = 8
-COLOR_ORDER = os.environ.get("LCD_COLOR_ORDER", "BGR").upper()
+COLOR_ORDER = os.environ.get("LCD_COLOR_ORDER", "RGB").upper()
 MADCTL_COLOR = 0x28 if COLOR_ORDER == "BGR" else 0x20
 
 WIDTH = 480
