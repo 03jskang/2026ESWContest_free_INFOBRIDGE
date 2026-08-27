@@ -52,6 +52,8 @@ def get_preview_frame():
 
 def capture_and_preprocess(preview_seconds: float = 2.0) -> str:
     """프리뷰를 표시한 뒤 촬영하고, AI 전송용 이미지 경로를 반환한다."""
+    global _camera
+
     camera = _ensure_camera()
     deadline = time.monotonic() + preview_seconds
 

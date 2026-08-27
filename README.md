@@ -30,6 +30,10 @@ Raspberry Pi 4B 및 Python 3 기반의 임베디드 소프트웨어 개발 환�
 3.5인치 LCD(480x320)에 정보를 스크롤하고 표시하는 화면 출력 모듈 구현
 ->api 넘기는 것은 구현 완료했지만 촬영 preview 구현해야 함. 
 
+카메라 프리뷰는 LCD에 실시간으로 표시하고, 프리뷰 종료 시 마지막 정지 이미지를
+Gemini에 전송합니다. 영상 자체를 Gemini에 보내는 것이 아니라 상품 분석에 필요한
+한 장의 사진을 보내는 구조입니다.
+
 8월 3주차: 외부 AI 서버 통신 및 번역 모듈 통합
 requests 모듈을 이용해 외부 AI 서버(Vision/OCR API)로 이미지를 전송하고 텍스트 및 부가 정보를 조회하는 AI 연동 모듈 개발
 AI 서버 결과를 바탕으로 성분 및 규정 등의 정보를 번역하는 모듈 통합
@@ -74,6 +78,18 @@ XPT2046 터치 컨트롤러 기준:
 
 문서 반영 및 수정 사항 : 
 제출용 엑셀 인적사항 반영하기.
+
+## CSV 상품 데이터
+
+`inventory.csv`는 다음 열을 사용합니다.
+
+현재 `retail_product_inventory_large.csv`는 다음 열을 사용합니다.
+
+`product_id,product_name,category,price,stock_quantity,location`
+
+Gemini가 인식한 상품명과 `product_name`을 비교해 일치하는 행을 찾고, 매장/재고/
+위치/설명을 결과 화면에 표시합니다. 다른 파일을 사용하려면 Raspberry Pi에서
+`INVENTORY_CSV=/경로/파일.csv python3 main.py`처럼 실행합니다.
 
 
 

@@ -235,6 +235,17 @@ def draw_result_screen(result: dict, scroll_offset: int = 0):
     y = draw_section("사용법", result.get("usage", ""), y)
     y = draw_section("여행 시 유의사항", result.get("travel_regulations", ""), y)
 
+    stock_info = result.get("stock_info")
+    if stock_info:
+        stock_text = (
+            f"매장: {stock_info.get('store', '')} / "
+            f"재고: {stock_info.get('stock', '')} / "
+            f"위치: {stock_info.get('location', '')} / "
+            f"가격: {stock_info.get('price', '')}원"
+        )
+        y = draw_section("매장 정보", stock_text, y)
+        y = draw_section("상품 설명", stock_info.get("description", ""), y)
+
     # 하단 고정 영역: 스크롤과 무관하게 항상 같은 자리에 재촬영 버튼 표시
     pygame.draw.rect(_screen, COLOR_BG, (0, SCREEN_HEIGHT - 64, SCREEN_WIDTH, 64))
     _draw_button(RETAKE_BUTTON_RECT, "다시 촬영")
