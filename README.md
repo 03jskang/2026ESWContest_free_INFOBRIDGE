@@ -119,7 +119,8 @@ sudo usermod -aG gpio,video $USER
 nano ~/.config/info-bridge.env
 GEMINI_API_KEY=발급받은_키
 GEMINI_TIMEOUT_MS=60000
-GEMINI_MODEL=gemini-2.5-flash
+# 비워두면 API 키에서 사용 가능한 Flash 모델을 자동 선택
+GEMINI_MODEL=
 # 패널에 따라 RGB 또는 BGR 선택
 LCD_COLOR_ORDER=BGR
 ```

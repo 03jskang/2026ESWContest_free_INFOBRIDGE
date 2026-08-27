@@ -34,8 +34,7 @@ from google.genai import types
 # ---- 설정값 ----
 # 참고: gemini-3.6-flash는 속도/비용/무료 등급 balance가 좋은 최신 모델입니다.
 # 나중에 더 정확한 인식이 필요하면 "gemini-3.1-pro" 등으로 교체 가능합니다.
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-MODEL_FALLBACKS = [MODEL_NAME, "gemini-2.0-flash", "gemini-1.5-flash"]
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "")
 API_TIMEOUT_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "60000"))
 API_RETRIES = 1
 
@@ -65,6 +64,31 @@ def _get_client() -> genai.Client:
             http_options=types.HttpOptions(timeout=API_TIMEOUT_MS),
         )
     return _client
+
+
+def _get_model_candidates(client: genai.Client) -> list[str]:
+    """현재 API 키에서 generateContent가 가능한 모델 목록을 가져온다."""
+    if MODEL_NAME:
+        return [MODEL_NAME]
+
+    candidates = []
+    for model in client.models.list():
+        name = getattr(model, "name", "") or ""
+        actions = getattr(model, "supported_actions", []) or []
+        if name.startswith("models/"):
+            name = name[7:]
+        if "generateContent" in actions and "flash" in name.lower():
+            candidates.append(name)
+
+    preferred = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+    ]
+    return [name for name in preferred if name in candidates] + [
+        name for name in candidates if name not in preferred
+    ]
 
 
 def _build_prompt(target_language_code: str) -> str:
@@ -106,7 +130,11 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
             prompt = _build_prompt(target_language_code)
             response = None
             last_error = None
-            for model_name in dict.fromkeys(MODEL_FALLBACKS):
+            model_candidates = _get_model_candidates(client)
+            if not model_candidates:
+                raise RuntimeError("이 API 키에서 사용할 수 있는 Flash 모델이 없습니다.")
+            print(f"[AI 연동 모듈] 사용할 모델: {model_candidates[0]}", flush=True)
+            for model_name in model_candidates:
                 for attempt in range(API_RETRIES + 1):
                     try:
                         response = client.models.generate_content(
@@ -118,7 +146,7 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
                         last_error = error
                         error_text = str(error).lower()
                         model_error = "404" in error_text or "model" in error_text
-                        if model_error and model_name != MODEL_FALLBACKS[-1]:
+                        if model_error and model_name != model_candidates[-1]:
                             print(
                                 f"[AI 연동 모듈] 모델 변경: {model_name} -> 다음 모델",
                                 flush=True,
@@ -144,7 +172,7 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
         elif "401" in error_text or "403" in error_text:
             message = "Gemini API 키를 확인해 주세요."
         elif "404" in error_text or "model" in error_text.lower():
-            message = f"Gemini 모델을 확인해 주세요: {MODEL_NAME}"
+            message = "사용 가능한 Gemini Flash 모델이 없습니다. API 키 권한을 확인해 주세요."
         elif "429" in error_text:
             message = "Gemini API 사용량 제한입니다. 잠시 후 다시 시도해 주세요."
         else:
