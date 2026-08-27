@@ -26,6 +26,7 @@ import RPi.GPIO as GPIO
 ENCODER_PIN_A = 27
 ENCODER_PIN_B = 22
 BUTTON_PIN = 17
+ENCODER_STEPS_PER_EVENT = 2
 
 # 로터리 엔코더로 선택할 수 있는 언어 목록
 # ai_module.py의 LANGUAGE_NAMES 키와 맞춰야 함
@@ -87,7 +88,7 @@ class RotaryEncoder:
             self._step_count += direction
             self._last_state = state
 
-            if abs(self._step_count) < 4:
+            if abs(self._step_count) < ENCODER_STEPS_PER_EVENT:
                 return
 
             clockwise = self._step_count > 0
