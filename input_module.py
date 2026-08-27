@@ -14,12 +14,12 @@ input_module.py
     엔코더 S2(버튼)                   -> 라즈베리파이 GND
 
 사용 전 설치 필요:
-    pip install gpiozero
+    sudo apt install -y python3-rpi.gpio
 """
 
 from threading import Lock
 
-from gpiozero import Button, DigitalInputDevice
+import RPi.GPIO as GPIO
 
 # ---- 설정값 (실제 배선한 GPIO 번호) ----
 ENCODER_PIN_A = 27
@@ -59,24 +59,34 @@ class RotaryEncoder:
     def __init__(self, pin_a: int, pin_b: int, on_clockwise=None, on_counterclockwise=None):
         self._on_clockwise = on_clockwise
         self._on_counterclockwise = on_counterclockwise
+        self._pin_a = pin_a
+        self._pin_b = pin_b
 
-        # pull_up=True: 평소 HIGH, 눌리거나 접점이 붙으면 LOW로 떨어짐
-        self._input_a = DigitalInputDevice(pin_a, pull_up=True)
-        self._input_b = DigitalInputDevice(pin_b, pull_up=True)
+        try:
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            GPIO.setup(pin_a, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.setup(pin_b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        self._state_lock = Lock()
-        self._last_state = (self._input_a.value << 1) | self._input_b.value
-        self._step_count = 0
+            self._state_lock = Lock()
+            self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
+            self._step_count = 0
 
-        # A/B 모든 전이를 사용해 정방향과 역방향을 동일하게 감지한다.
-        self._input_a.when_activated = self._decode_rotation
-        self._input_a.when_deactivated = self._decode_rotation
-        self._input_b.when_activated = self._decode_rotation
-        self._input_b.when_deactivated = self._decode_rotation
+            GPIO.add_event_detect(
+                pin_a, GPIO.BOTH, callback=self._decode_rotation, bouncetime=2
+            )
+            GPIO.add_event_detect(
+                pin_b, GPIO.BOTH, callback=self._decode_rotation, bouncetime=2
+            )
+        except Exception:
+            GPIO.remove_event_detect(pin_a)
+            GPIO.remove_event_detect(pin_b)
+            GPIO.cleanup([pin_a, pin_b])
+            raise
 
-    def _decode_rotation(self):
+    def _decode_rotation(self, _channel):
         with self._state_lock:
-            state = (self._input_a.value << 1) | self._input_b.value
+            state = (GPIO.input(self._pin_a) << 1) | GPIO.input(self._pin_b)
             transition = (self._last_state << 2) | state
             direction = {
                 0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
@@ -91,8 +101,8 @@ class RotaryEncoder:
             clockwise = self._step_count > 0
             self._step_count = 0
             print(
-                f"[엔코더] 회전 한 칸 감지, A={int(self._input_a.value)}, "
-                f"B={int(self._input_b.value)}, "
+                f"[엔코더] 회전 한 칸 감지, A={GPIO.input(self._pin_a)}, "
+                f"B={GPIO.input(self._pin_b)}, "
                 f"방향={'CW' if clockwise else 'CCW'}",
                 flush=True,
             )
@@ -101,6 +111,34 @@ class RotaryEncoder:
             self._on_clockwise()
         elif not clockwise and self._on_counterclockwise:
             self._on_counterclockwise()
+
+    def close(self):
+        GPIO.remove_event_detect(self._pin_a)
+        GPIO.remove_event_detect(self._pin_b)
+        GPIO.cleanup([self._pin_a, self._pin_b])
+
+
+class Button:
+    """RPi.GPIO 기반 버튼 입력."""
+
+    def __init__(self, pin: int, pull_up=True, bounce_time=0.2):
+        self._pin = pin
+        self.when_pressed = None
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP if pull_up else GPIO.PUD_DOWN)
+        GPIO.add_event_detect(
+            pin,
+            GPIO.FALLING if pull_up else GPIO.RISING,
+            callback=self._pressed,
+            bouncetime=int(bounce_time * 1000),
+        )
+
+    def _pressed(self, _channel):
+        if self.when_pressed:
+            self.when_pressed()
+
+    def close(self):
+        GPIO.remove_event_detect(self._pin)
+        GPIO.cleanup(self._pin)
 
 
 def _handle_clockwise():

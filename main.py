@@ -19,7 +19,7 @@ main.py
     엔코더 S2(버튼)   -> GND
 
 사용 전 설치 필요:
-    pip install gpiozero google-genai pillow numpy
+    pip install google-genai pillow numpy
     sudo apt install -y python3-picamera2 python3-pygame
 
 실행:
@@ -41,10 +41,10 @@ from input_module import (
     ENCODER_PIN_A,
     ENCODER_PIN_B,
     BUTTON_PIN,
+    Button,
     _handle_clockwise,
     _handle_counterclockwise,
 )
-from gpiozero import Button
 import display_module as display
 
 # ---- 앱 상태 (모듈 전역, 여러 스레드에서 접근하므로 lock으로 보호) ----
@@ -216,8 +216,7 @@ def main():
         if button is not None:
             button.close()
         if encoder is not None:
-            encoder._input_a.close()
-            encoder._input_b.close()
+            encoder.close()
         display.quit_display()
 
 
