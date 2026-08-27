@@ -175,7 +175,6 @@ def main():
         last_render_key = None
 
         while running:
-            encoder.poll()
             button.poll()
 
             # ---- 임시: 엔코더 배선 확인/테스트용 키보드 입력 ----

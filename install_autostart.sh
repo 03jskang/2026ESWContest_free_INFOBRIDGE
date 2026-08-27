@@ -25,16 +25,19 @@ chown "${SERVICE_USER}:${SERVICE_USER}" "${ENV_FILE}"
 cat > "${SERVICE_PATH}" <<EOF
 [Unit]
 Description=Info Bridge LCD application
-After=local-fs.target network-online.target
+After=local-fs.target dev-spidev0.0.device network-online.target
 Wants=network-online.target
+Requires=dev-spidev0.0.device
 
 [Service]
 Type=simple
 User=${SERVICE_USER}
+SupplementaryGroups=gpio video
 WorkingDirectory=${PROJECT_DIR}
 EnvironmentFile=-${ENV_FILE}
 Environment=PYTHONUNBUFFERED=1
 ExecStart=${PYTHON_BIN} -u ${PROJECT_DIR}/main.py
+ExecStartPre=/bin/sleep 2
 Restart=on-failure
 RestartSec=3
 

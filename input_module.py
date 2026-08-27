@@ -17,7 +17,7 @@ input_module.py
     sudo apt install -y python3-rpi.gpio
 """
 
-from threading import Lock
+from threading import Event, Lock, Thread
 import time
 
 import RPi.GPIO as GPIO
@@ -26,7 +26,8 @@ import RPi.GPIO as GPIO
 ENCODER_PIN_A = 27
 ENCODER_PIN_B = 22
 BUTTON_PIN = 17
-ENCODER_STEPS_PER_EVENT = 2
+ENCODER_STEPS_PER_EVENT = 4
+ENCODER_POLL_INTERVAL = 0.001
 
 # 로터리 엔코더로 선택할 수 있는 언어 목록
 # ai_module.py의 LANGUAGE_NAMES 키와 맞춰야 함
@@ -72,10 +73,19 @@ class RotaryEncoder:
         self._state_lock = Lock()
         self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
         self._step_count = 0
+        self._pending_direction = 0
+        self._stop_event = Event()
+        self._poll_thread = Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
 
     def poll(self):
-        """메인 루프에서 호출해 GPIO edge detection 없이 회전을 읽는다."""
+        """호환성을 위해 남겨둔 단일 폴링 함수."""
         self._decode_rotation()
+
+    def _poll_loop(self):
+        while not self._stop_event.is_set():
+            self._decode_rotation()
+            time.sleep(ENCODER_POLL_INTERVAL)
 
     def _decode_rotation(self):
         with self._state_lock:
@@ -85,6 +95,10 @@ class RotaryEncoder:
                 0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
                 0b0010: -1, 0b1011: -1, 0b1101: -1, 0b0100: -1,
             }.get(transition, 0)
+            if direction and self._pending_direction and direction != self._pending_direction:
+                self._step_count = 0
+            if direction:
+                self._pending_direction = direction
             self._step_count += direction
             self._last_state = state
 
@@ -93,6 +107,7 @@ class RotaryEncoder:
 
             clockwise = self._step_count > 0
             self._step_count = 0
+            self._pending_direction = 0
             print(
                 f"[엔코더] 회전 한 칸 감지, A={GPIO.input(self._pin_a)}, "
                 f"B={GPIO.input(self._pin_b)}, "
@@ -106,6 +121,8 @@ class RotaryEncoder:
             self._on_counterclockwise()
 
     def close(self):
+        self._stop_event.set()
+        self._poll_thread.join(timeout=0.1)
         GPIO.cleanup([self._pin_a, self._pin_b])
 
 
