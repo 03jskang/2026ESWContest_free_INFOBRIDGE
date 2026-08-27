@@ -10,7 +10,9 @@ from threading import Lock
 from PIL import Image, ImageOps
 from picamera2 import Picamera2
 
+PREVIEW_CAMERA_SIZE = (640, 480)
 PREVIEW_SIZE = (480, 320)
+STILL_CAMERA_SIZE = (1536, 864)
 CAPTURE_PATH = Path("captured.jpg")
 PROCESSED_PATH = Path("captured_processed.jpg")
 FLIP_CAMERA_VERTICAL = True
@@ -28,10 +30,11 @@ def _ensure_camera():
             global _latest_frame
             _latest_frame = None
         _camera = Picamera2()
-        config = _camera.create_preview_configuration(
-            main={"size": PREVIEW_SIZE, "format": "RGB888"}
+        preview_config = _camera.create_preview_configuration(
+            main={"size": PREVIEW_CAMERA_SIZE, "format": "RGB888"},
+            buffer_count=4,
         )
-        _camera.configure(config)
+        _camera.configure(preview_config)
         _camera.start()
     return _camera
 
@@ -63,9 +66,18 @@ def capture_and_preprocess(preview_seconds: float = 2.0) -> str:
     while time.monotonic() < deadline:
         _update_preview_frame()
 
-    camera.capture_file(str(CAPTURE_PATH))
-    camera.stop()
-    camera.close()
+    try:
+        still_config = camera.create_still_configuration(
+            main={"size": STILL_CAMERA_SIZE, "format": "RGB888"},
+            buffer_count=2,
+        )
+        camera.switch_mode_and_capture_file(still_config, str(CAPTURE_PATH))
+    finally:
+        try:
+            camera.stop()
+        finally:
+            camera.close()
+            _camera = None
 
     with Image.open(CAPTURE_PATH) as image:
         image = image.convert("RGB")
@@ -74,7 +86,6 @@ def capture_and_preprocess(preview_seconds: float = 2.0) -> str:
         processed = ImageOps.fit(image, PREVIEW_SIZE)
         processed.save(PROCESSED_PATH, quality=95)
 
-    _camera = None
     return str(PROCESSED_PATH)
 
 
@@ -82,6 +93,8 @@ def close_camera():
     """예외나 프로그램 종료 시 카메라를 정리한다."""
     global _camera
     if _camera is not None:
-        _camera.stop()
-        _camera.close()
+        try:
+            _camera.stop()
+        finally:
+            _camera.close()
         _camera = None

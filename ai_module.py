@@ -24,6 +24,7 @@ API 키 설정 (라즈베리파이 터미널에서):
 
 import json
 import os
+import socket
 import time
 
 from PIL import Image
@@ -33,7 +34,8 @@ from google.genai import types
 # ---- 설정값 ----
 # 참고: gemini-3.6-flash는 속도/비용/무료 등급 balance가 좋은 최신 모델입니다.
 # 나중에 더 정확한 인식이 필요하면 "gemini-3.1-pro" 등으로 교체 가능합니다.
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_FALLBACKS = [MODEL_NAME, "gemini-2.0-flash", "gemini-1.5-flash"]
 API_TIMEOUT_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "60000"))
 API_RETRIES = 1
 
@@ -94,34 +96,63 @@ def recognize_and_translate(image_path: str, target_language_code: str = "ko") -
     target_language_code 언어로 번역된 결과를 dict로 반환한다.
     """
     try:
+        try:
+            socket.create_connection(("generativelanguage.googleapis.com", 443), timeout=5).close()
+        except OSError as error:
+            raise ConnectionError("Google API 서버에 연결할 수 없습니다. Wi-Fi를 확인하세요.") from error
+
         client = _get_client()
         with Image.open(image_path) as image:
             prompt = _build_prompt(target_language_code)
-            for attempt in range(API_RETRIES + 1):
-                try:
-                    response = client.models.generate_content(
-                        model=MODEL_NAME,
-                        contents=[image, prompt],
-                    )
+            response = None
+            last_error = None
+            for model_name in dict.fromkeys(MODEL_FALLBACKS):
+                for attempt in range(API_RETRIES + 1):
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=[image, prompt],
+                        )
+                        break
+                    except Exception as error:
+                        last_error = error
+                        error_text = str(error).lower()
+                        model_error = "404" in error_text or "model" in error_text
+                        if model_error and model_name != MODEL_FALLBACKS[-1]:
+                            print(
+                                f"[AI 연동 모듈] 모델 변경: {model_name} -> 다음 모델",
+                                flush=True,
+                            )
+                            break
+                        if attempt == API_RETRIES:
+                            raise
+                        print(
+                            f"[AI 연동 모듈] API 재시도 {attempt + 1}/{API_RETRIES}: "
+                            f"{error}",
+                            flush=True,
+                        )
+                        time.sleep(2 ** attempt)
+                if response is not None:
                     break
-                except Exception as error:
-                    if attempt == API_RETRIES:
-                        raise
-                    print(
-                        f"[AI 연동 모듈] API 재시도 {attempt + 1}/{API_RETRIES}: "
-                        f"{error}",
-                        flush=True,
-                    )
-                    time.sleep(2 ** attempt)
+            if response is None and last_error is not None:
+                raise last_error
     except Exception as e:
-        print(
-            f"[AI 연동 모듈] API 호출 실패({type(e).__name__}): {e}",
-            flush=True,
-        )
+        error_text = str(e)
+        print(f"[AI 연동 모듈] API 호출 실패({type(e).__name__}): {error_text}", flush=True)
+        if isinstance(e, ConnectionError):
+            message = "Wi-Fi 연결을 확인해 주세요."
+        elif "401" in error_text or "403" in error_text:
+            message = "Gemini API 키를 확인해 주세요."
+        elif "404" in error_text or "model" in error_text.lower():
+            message = f"Gemini 모델을 확인해 주세요: {MODEL_NAME}"
+        elif "429" in error_text:
+            message = "Gemini API 사용량 제한입니다. 잠시 후 다시 시도해 주세요."
+        else:
+            message = "서버 응답 지연 또는 API 오류입니다. 잠시 후 다시 시도해 주세요."
         return {
             "product_name": "",
             "category": "",
-            "label_text_summary": "네트워크 오류 또는 서버 응답 지연. 다시 시도해 주세요.",
+            "label_text_summary": message,
             "usage": "",
             "travel_regulations": "",
             "confidence": "낮음",
