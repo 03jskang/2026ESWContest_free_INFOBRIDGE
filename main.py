@@ -123,6 +123,11 @@ def on_dial_scroll(delta: int):
         new_offset = _scroll_offset + delta * SCROLL_STEP
         new_offset = max(0, min(new_offset, _max_scroll))
         _scroll_offset = new_offset
+    print(
+        f"[스크롤] 방향={'아래' if delta > 0 else '위'}, "
+        f"위치={new_offset}/{_max_scroll}",
+        flush=True,
+    )
 
 
 def clockwise_combined():

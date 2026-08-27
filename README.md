@@ -83,9 +83,9 @@ XPT2046 터치 컨트롤러 기준:
 
 `inventory.csv`는 다음 열을 사용합니다.
 
-현재 `retail_product_inventory_large.csv`는 다음 열을 사용합니다.
+현재 `convenience_store_inventory.csv`는 다음 열을 사용합니다.
 
-`product_id,product_name,category,price,stock_quantity,location`
+`product_id,product_name,category,price,stock_quantity,location,event_type`
 
 Gemini가 인식한 상품명과 `product_name`을 비교해 일치하는 행을 찾고, 매장/재고/
 위치/설명을 결과 화면에 표시합니다. 다른 파일을 사용하려면 Raspberry Pi에서

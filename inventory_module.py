@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent
 CSV_PATH = Path(
     os.environ.get(
         "INVENTORY_CSV",
-        str(BASE_DIR / "retail_product_inventory_large.csv"),
+        str(BASE_DIR / "convenience_store_inventory.csv"),
     )
 )
 
@@ -27,7 +27,8 @@ def lookup_stock(product_name: str):
                 row["stock"] = row.get("stock_quantity", "")
                 row["description"] = (
                     f"{row.get('category', '')} 상품, "
-                    f"가격 {row.get('price', '')}원"
+                    f"가격 {row.get('price', '')}원, "
+                    f"행사 {row.get('event_type', '단품')}"
                 )
                 return row
     return None

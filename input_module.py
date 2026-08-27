@@ -65,15 +65,34 @@ class RotaryEncoder:
         self._input_b = DigitalInputDevice(pin_b, pull_up=True)
 
         self._state_lock = Lock()
+        self._last_state = (self._input_a.value << 1) | self._input_b.value
+        self._step_count = 0
 
-        # A상의 하강 에지 한 번을 한 칸으로 사용해 반응성을 우선한다.
+        # A/B 모든 전이를 사용해 정방향과 역방향을 동일하게 감지한다.
+        self._input_a.when_activated = self._decode_rotation
         self._input_a.when_deactivated = self._decode_rotation
+        self._input_b.when_activated = self._decode_rotation
+        self._input_b.when_deactivated = self._decode_rotation
 
     def _decode_rotation(self):
         with self._state_lock:
-            clockwise = bool(self._input_b.value)
+            state = (self._input_a.value << 1) | self._input_b.value
+            transition = (self._last_state << 2) | state
+            direction = {
+                0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
+                0b0010: -1, 0b1011: -1, 0b1101: -1, 0b0100: -1,
+            }.get(transition, 0)
+            self._step_count += direction
+            self._last_state = state
+
+            if abs(self._step_count) < 4:
+                return
+
+            clockwise = self._step_count > 0
+            self._step_count = 0
             print(
-                f"[엔코더] A 하강 감지, B={int(self._input_b.value)}, "
+                f"[엔코더] 회전 한 칸 감지, A={int(self._input_a.value)}, "
+                f"B={int(self._input_b.value)}, "
                 f"방향={'CW' if clockwise else 'CCW'}",
                 flush=True,
             )
