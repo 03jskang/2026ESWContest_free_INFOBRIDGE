@@ -33,7 +33,7 @@ import threading
 
 import pygame
 
-from capture_module import capture_and_preprocess
+from capture_module import capture_and_preprocess, close_camera, get_preview_frame
 from ai_module import recognize_and_translate
 from input_module import (
     get_current_language,
@@ -47,10 +47,11 @@ from input_module import (
 )
 from gpiozero import Button
 import display_module as display
+import touch_module as touch
 
 # ---- 앱 상태 (모듈 전역, 여러 스레드에서 접근하므로 lock으로 보호) ----
 _state_lock = threading.Lock()
-_app_state = "waiting"      # "waiting" | "loading" | "result"
+_app_state = "waiting"      # "waiting" | "preview" | "loading" | "result"
 _current_result = None      # AI 인식 결과 dict
 _scroll_offset = 0          # 결과 화면 스크롤 위치 (픽셀)
 _max_scroll = 0              # 스크롤 가능한 최대 픽셀 (결과 화면 그릴 때 갱신됨)
@@ -66,13 +67,14 @@ def _run_capture_pipeline():
     global _app_state, _current_result, _scroll_offset
 
     with _state_lock:
-        _app_state = "loading"
+        _app_state = "preview"
 
     language_code = get_current_language()
 
     try:
         image_path = capture_and_preprocess()
     except Exception as e:
+        close_camera()      
         print(f"[메인] 촬영 중 오류 발생: {e}")
         with _state_lock:
             _current_result = {
@@ -86,6 +88,9 @@ def _run_capture_pipeline():
             _app_state = "result"
             _scroll_offset = 0
         return
+
+    with _state_lock:
+        _app_state = "loading"
 
     result = recognize_and_translate(image_path, target_language_code=language_code)
 
@@ -151,6 +156,7 @@ def main():
     global _max_scroll
 
     display.init_display()
+    touch.init_touch()
 
     encoder = RotaryEncoder(
         ENCODER_PIN_A,
@@ -169,9 +175,33 @@ def main():
 
     # 스와이프 제스처 감지용 (터치 다운 시작 좌표 기록)
     swipe_start_pos = None
+    touch_start_pos = None
     SWIPE_MIN_DISTANCE = 40  # 이 픽셀 이상 이동해야 스와이프로 인정
 
     while running:
+        touch_pos = touch.read_touch_point(display.SCREEN_WIDTH, display.SCREEN_HEIGHT)
+        if touch_pos is not None:
+            if touch_start_pos is None:
+                touch_start_pos = touch_pos
+        elif touch_start_pos is not None:
+            touch_pos = touch_start_pos
+
+            with _state_lock:
+                current = _app_state
+
+            if current == "waiting" and display.is_point_in_rect(touch_pos, display.CAPTURE_BUTTON_RECT):
+                on_button_pressed()
+            elif current == "result" and display.is_point_in_rect(touch_pos, display.RETAKE_BUTTON_RECT):
+                on_button_pressed()
+            elif current == "waiting":
+                dx = touch_pos[0] - touch_start_pos[0]
+                if dx > SWIPE_MIN_DISTANCE:
+                    counterclockwise_combined()
+                elif dx < -SWIPE_MIN_DISTANCE:
+                    clockwise_combined()
+
+            touch_start_pos = None
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -219,6 +249,8 @@ def main():
 
         if current_state == "waiting":
             display.draw_waiting_screen(get_current_language_label())
+        elif current_state == "preview":
+            display.draw_camera_preview(get_preview_frame())
         elif current_state == "loading":
             display.draw_loading_screen("인식 중입니다...")
         elif current_state == "result":
@@ -227,6 +259,8 @@ def main():
 
         clock.tick(display.FPS)
 
+    close_camera()
+    touch.close_touch()
     display.quit_display()
 
 

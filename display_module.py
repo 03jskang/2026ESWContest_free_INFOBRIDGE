@@ -181,6 +181,26 @@ def draw_loading_screen(message: str = "인식 중입니다..."):
     _flip_to_lcd()
 
 
+def draw_camera_preview(frame, message: str = "촬영 중입니다..."):
+    """Picamera2 프리뷰 프레임과 촬영 상태를 표시한다."""
+    _screen.fill(COLOR_BG)
+
+    if frame is not None:
+        preview = pygame.image.fromstring(
+            frame.tobytes(), frame.size, "RGB"
+        )
+        preview = pygame.transform.scale(preview, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        _screen.blit(preview, (0, 0))
+
+    overlay = pygame.Surface((SCREEN_WIDTH, 42), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 170))
+    _screen.blit(overlay, (0, 0))
+    message_surf = _font_label.render(message, True, COLOR_TEXT)
+    _screen.blit(message_surf, (20, 12))
+
+    _flip_to_lcd()
+
+
 def draw_result_screen(result: dict, scroll_offset: int = 0):
     """
     AI 인식 결과 화면. 내용이 길면 scroll_offset(픽셀)만큼 위로 밀어서 표시.
