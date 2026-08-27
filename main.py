@@ -168,6 +168,7 @@ def main():
         button.when_pressed = on_button_pressed
 
         print("[메인] 준비 완료. 다이얼을 돌려 언어를 선택하고, 버튼을 눌러 촬영을 시작하세요.", flush=True)
+        print("[메인] 엔코더 입력 방식: 고속 폴링", flush=True)
         print("[메인] 종료하려면 창을 닫거나 ESC를 누르세요.", flush=True)
 
         clock = pygame.time.Clock()

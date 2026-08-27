@@ -72,11 +72,17 @@ class RotaryEncoder:
 
         self._state_lock = Lock()
         self._last_state = (GPIO.input(pin_a) << 1) | GPIO.input(pin_b)
+        self._last_logged_state = self._last_state
         self._step_count = 0
         self._pending_direction = 0
         self._stop_event = Event()
         self._poll_thread = Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
+        print(
+            f"[엔코더] 폴링 시작 A=GPIO{pin_a}, B=GPIO{pin_b}, "
+            f"초기상태={self._last_state:02b}",
+            flush=True,
+        )
 
     def poll(self):
         """호환성을 위해 남겨둔 단일 폴링 함수."""
@@ -90,6 +96,9 @@ class RotaryEncoder:
     def _decode_rotation(self):
         with self._state_lock:
             state = (GPIO.input(self._pin_a) << 1) | GPIO.input(self._pin_b)
+            if state != self._last_logged_state:
+                print(f"[엔코더] GPIO 상태 변화: {self._last_logged_state:02b}->{state:02b}", flush=True)
+                self._last_logged_state = state
             transition = (self._last_state << 2) | state
             direction = {
                 0b0001: 1, 0b0111: 1, 0b1110: 1, 0b1000: 1,
