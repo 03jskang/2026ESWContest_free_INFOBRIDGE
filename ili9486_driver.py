@@ -1,3 +1,5 @@
+import os
+
 import spidev
 import RPi.GPIO as GPIO
 import time
@@ -6,6 +8,8 @@ from PIL import Image
 DC = 24
 RST = 25
 CS = 8
+COLOR_ORDER = os.environ.get("LCD_COLOR_ORDER", "BGR").upper()
+MADCTL_COLOR = 0x28 if COLOR_ORDER == "BGR" else 0x20
 
 WIDTH = 480
 HEIGHT = 320
@@ -97,7 +101,8 @@ def init():
     send_data(0x55)
 
     send_cmd(0x36)
-    send_data(0x28)
+    # 이 패널은 BGR 순서가 기본이다. RGB 패널이면 LCD_COLOR_ORDER=RGB를 사용한다.
+    send_data(MADCTL_COLOR)
 
     send_cmd(0x11)
     time.sleep(0.15)

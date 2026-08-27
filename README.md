@@ -105,6 +105,8 @@ sudo bash install_autostart.sh
 ```bash
 nano ~/.config/info-bridge.env
 GEMINI_API_KEY=발급받은_키
+# 패널에 따라 RGB 또는 BGR 선택
+LCD_COLOR_ORDER=BGR
 ```
 
 서비스 확인 및 로그:
@@ -115,6 +117,26 @@ sudo journalctl -u info-bridge.service -f
 ```
 
 서비스를 중지하려면 `sudo systemctl disable --now info-bridge.service`를 실행합니다.
+
+## 색상 및 중국어 폰트
+
+LCD의 패널에 따라 RGB/BGR 색상 순서가 다릅니다. 현재 기본값은 기존 패널 설정에
+맞춘 BGR입니다. 색상이 빨강/파랑 반대로 보이면 Raspberry Pi에서 다음처럼 RGB로
+실행해 비교합니다.
+
+```bash
+LCD_COLOR_ORDER=RGB python3 main.py
+```
+
+기본값을 고정하려면 `ili9486_driver.py`의 `COLOR_ORDER`를 `RGB` 또는 `BGR`로
+설정합니다.
+중국어가 깨지면 Raspberry Pi에서 다음 폰트를 설치합니다.
+
+```bash
+sudo apt update
+sudo apt install -y fonts-noto-cjk
+sudo systemctl restart info-bridge.service
+```
 
 
 

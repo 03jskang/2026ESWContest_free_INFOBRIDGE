@@ -50,6 +50,7 @@ _font_title = None
 _font_label = None
 _font_body = None
 _font_hint = None
+_font_sets = {}
 
 # 결과 화면 스크롤 위치 (버튼/엔코더로 조절)
 _scroll_offset = 0
@@ -67,7 +68,7 @@ def _draw_button(rect: tuple, label: str):
     """버튼 사각형과 라벨을 그린다. rect = (x, y, w, h)"""
     x, y, w, h = rect
     pygame.draw.rect(_screen, COLOR_BUTTON, (x, y, w, h), border_radius=10)
-    label_surf = _font_label.render(label, True, COLOR_BUTTON_TEXT)
+    label_surf = _render_text(label, _font_label, COLOR_BUTTON_TEXT)
     label_rect = label_surf.get_rect(center=(x + w // 2, y + h // 2))
     _screen.blit(label_surf, label_rect)
 
@@ -94,7 +95,7 @@ def is_point_in_rect(point: tuple, rect: tuple) -> bool:
 
 def init_display():
     """pygame을 초기화하고 화면을 준비한다. 프로그램 시작 시 한 번만 호출."""
-    global _screen, _font_title, _font_label, _font_body, _font_hint
+    global _screen, _font_title, _font_label, _font_body, _font_hint, _font_sets
 
     pygame.init()
     _screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -103,27 +104,90 @@ def init_display():
     # 실제 3.5인치 LCD (SPI, ILI9486) 초기화
     ili9486_driver.init()
 
-    # 한글 폰트: 라즈베리파이 OS 기본 탑재 나눔고딕 계열 시도, 없으면 시스템 기본 폰트로 대체
-    font_path = None
-    for candidate in [
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    # 한국어/중국어/일본어 글리프가 함께 있는 CJK 폰트를 먼저 사용한다.
+    font_candidates = [
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    ]:
-        try:
-            pygame.font.Font(candidate, 10)
-            font_path = candidate
-            break
-        except (FileNotFoundError, OSError):
-            continue
+        "/usr/share/fonts/truetype/noto/NotoSansCJKkr-Regular.otf",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/usr/share/fonts/truetype/arphic/ukai.ttc",
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    ]
+    cjk_candidates = set(font_candidates[:-1])
+    _font_sets = {}
+    loaded_cjk_font = False
+    for size in [FONT_SIZE_TITLE, FONT_SIZE_LABEL, FONT_SIZE_BODY, FONT_SIZE_HINT]:
+        fonts = []
+        for candidate in font_candidates:
+            try:
+                fonts.append(pygame.font.Font(candidate, size))
+                if candidate in cjk_candidates:
+                    loaded_cjk_font = True
+            except (FileNotFoundError, OSError):
+                continue
+        if not fonts:
+            fonts.append(pygame.font.Font(None, size))
+        _font_sets[size] = fonts
 
-    _font_title = pygame.font.Font(font_path, FONT_SIZE_TITLE)
-    _font_label = pygame.font.Font(font_path, FONT_SIZE_LABEL)
-    _font_body = pygame.font.Font(font_path, FONT_SIZE_BODY)
-    _font_hint = pygame.font.Font(font_path, FONT_SIZE_HINT)
+    _font_title = _font_sets[FONT_SIZE_TITLE][0]
+    _font_label = _font_sets[FONT_SIZE_LABEL][0]
+    _font_body = _font_sets[FONT_SIZE_BODY][0]
+    _font_hint = _font_sets[FONT_SIZE_HINT][0]
 
-    if font_path is None:
-        print("[화면 출력 모듈] 경고: 한글 폰트를 찾지 못해 기본 폰트로 대체합니다. "
-              "한글이 깨져 보이면 'sudo apt install fonts-nanum'을 설치하세요.")
+    if not loaded_cjk_font:
+        print(
+            "[화면 출력 모듈] 경고: CJK 폰트를 찾지 못했습니다. "
+            "'sudo apt install fonts-noto-cjk'를 설치하세요.",
+            flush=True,
+        )
+
+
+def _font_supports(font, char: str) -> bool:
+    """폰트에 문자의 글리프가 있는지 확인한다."""
+    if char.isspace() or char in ".,!?/:-()[]{}<>·|+=" or char.isascii():
+        return True
+    metrics = font.metrics(char)
+    return bool(metrics and metrics[0] is not None)
+
+
+def _font_for_char(font, char: str):
+    """기본 폰트가 지원하지 않는 문자를 지원 폰트로 대체한다."""
+    for font_group in _font_sets.values():
+        for candidate in font_group:
+            if candidate.get_height() == font.get_height() and _font_supports(candidate, char):
+                return candidate
+    return font
+
+
+def _render_text(text: str, font, color):
+    """문자별 폴백 폰트를 적용해 한 줄을 렌더링한다."""
+    if not text:
+        return font.render(text, True, color)
+
+    groups = []
+    current_font = _font_for_char(font, text[0])
+    current_text = text[0]
+    for char in text[1:]:
+        char_font = _font_for_char(font, char)
+        if char_font == current_font:
+            current_text += char
+        else:
+            groups.append((current_font, current_text))
+            current_font = char_font
+            current_text = char
+    groups.append((current_font, current_text))
+
+    width = sum(group_font.size(group_text)[0] for group_font, group_text in groups)
+    surface = pygame.Surface((max(1, width), font.get_height()), pygame.SRCALPHA)
+    x = 0
+    for group_font, group_text in groups:
+        rendered = group_font.render(group_text, True, color)
+        surface.blit(rendered, (x, 0))
+        x += rendered.get_width()
+    return surface
+
+
+def _text_width(text: str, font) -> int:
+    return _render_text(text, font, COLOR_TEXT).get_width()
 
 
 def _wrap_text(text: str, font, max_width: int) -> list:
@@ -135,7 +199,7 @@ def _wrap_text(text: str, font, max_width: int) -> list:
     current_line = ""
     for char in text:
         test_line = current_line + char
-        if font.size(test_line)[0] > max_width:
+        if _text_width(test_line, font) > max_width:
             lines.append(current_line)
             current_line = char
         else:
@@ -149,18 +213,18 @@ def draw_waiting_screen(language_label: str):
     """대기 화면: 언어 선택 안내 표시"""
     _screen.fill(COLOR_BG)
 
-    title_surf = _font_title.render("인포 브릿지", True, COLOR_TEXT)
+    title_surf = _render_text("인포 브릿지", _font_title, COLOR_TEXT)
     _screen.blit(title_surf, (20, 30))
 
-    label_surf = _font_label.render("촬영할 준비가 되었습니다", True, COLOR_MUTED)
+    label_surf = _render_text("촬영할 준비가 되었습니다", _font_label, COLOR_MUTED)
     _screen.blit(label_surf, (20, 80))
 
-    lang_surf = _font_title.render(f"언어: {language_label}", True, COLOR_ACCENT)
+    lang_surf = _render_text(f"언어: {language_label}", _font_title, COLOR_ACCENT)
     _screen.blit(lang_surf, (20, 130))
 
-    hint1 = _font_hint.render("다이얼을 돌리거나 화면을 좌우로 스와이프해", True, COLOR_MUTED)
+    hint1 = _render_text("다이얼을 돌리거나 화면을 좌우로 스와이프해", _font_hint, COLOR_MUTED)
     _screen.blit(hint1, (20, 180))
-    hint2 = _font_hint.render("언어를 선택하세요", True, COLOR_MUTED)
+    hint2 = _render_text("언어를 선택하세요", _font_hint, COLOR_MUTED)
     _screen.blit(hint2, (20, 200))
 
     _draw_button(CAPTURE_BUTTON_RECT, "촬영하기")
@@ -172,10 +236,10 @@ def draw_loading_screen(message: str = "인식 중입니다..."):
     """AI 서버 응답 대기 중 화면"""
     _screen.fill(COLOR_BG)
 
-    msg_surf = _font_title.render(message, True, COLOR_ACCENT)
+    msg_surf = _render_text(message, _font_title, COLOR_ACCENT)
     _screen.blit(msg_surf, (20, 140))
 
-    hint_surf = _font_hint.render("잠시만 기다려 주세요", True, COLOR_MUTED)
+    hint_surf = _render_text("잠시만 기다려 주세요", _font_hint, COLOR_MUTED)
     _screen.blit(hint_surf, (20, 180))
 
     _flip_to_lcd()
@@ -195,7 +259,7 @@ def draw_camera_preview(frame, message: str = "촬영 중입니다..."):
     overlay = pygame.Surface((SCREEN_WIDTH, 42), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 170))
     _screen.blit(overlay, (0, 0))
-    message_surf = _font_label.render(message, True, COLOR_TEXT)
+    message_surf = _render_text(message, _font_label, COLOR_TEXT)
     _screen.blit(message_surf, (20, 12))
 
     _flip_to_lcd()
@@ -217,14 +281,14 @@ def draw_result_screen(result: dict, scroll_offset: int = 0):
         if not value:
             return y_pos
         if y_pos > -line_height and y_pos < content_bottom:
-            label_surf = _font_label.render(label, True, COLOR_LABEL)
+            label_surf = _render_text(label, _font_label, COLOR_LABEL)
             _screen.blit(label_surf, (20, y_pos))
         y_pos += line_height
 
         lines = _wrap_text(value, _font_body, content_width)
         for line in lines:
             if y_pos > -line_height and y_pos < content_bottom:
-                line_surf = _font_body.render(line, True, COLOR_TEXT)
+                line_surf = _render_text(line, _font_body, COLOR_TEXT)
                 _screen.blit(line_surf, (20, y_pos))
             y_pos += line_height
         return y_pos + 10  # 섹션 간 여백
