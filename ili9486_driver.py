@@ -1,4 +1,5 @@
 import os
+from threading import Lock
 
 import spidev
 import RPi.GPIO as GPIO
@@ -14,6 +15,7 @@ SPI_SPEED_HZ = int(os.environ.get("LCD_SPI_SPEED", "8000000"))
 
 WIDTH = 480
 HEIGHT = 320
+_display_lock = Lock()
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -120,32 +122,30 @@ def set_window(x0, y0, x1, y1):
     send_cmd(0x2C)
 
 def display_image(img):
-    img = img.resize((WIDTH, HEIGHT)).convert("RGB")
-    pixels = img.load()
-    # 화면 전환 뒤 표시가 꺼진 일부 패널을 다시 일반 표시 상태로 복구한다.
-    send_cmd(0x13)
-    send_cmd(0x29)
-    set_window(0, 0, WIDTH - 1, HEIGHT - 1)
+    with _display_lock:
+        img = img.resize((WIDTH, HEIGHT)).convert("RGB")
+        pixels = img.load()
+        set_window(0, 0, WIDTH - 1, HEIGHT - 1)
 
-    buf = []
-    CHUNK = 4000
+        buf = []
+        CHUNK = 4000
 
-    GPIO.output(CS, GPIO.LOW)
-    GPIO.output(DC, GPIO.HIGH)
-    try:
-        for y in range(HEIGHT):
-            for x in range(WIDTH):
-                r, g, b = pixels[x, y]
-                rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-                buf.append(rgb565 >> 8)
-                buf.append(rgb565 & 0xFF)
-                if len(buf) >= CHUNK:
-                    spi.writebytes(buf)
-                    buf = []
-        if buf:
-            spi.writebytes(buf)
-    finally:
-        GPIO.output(CS, GPIO.HIGH)
+        GPIO.output(CS, GPIO.LOW)
+        GPIO.output(DC, GPIO.HIGH)
+        try:
+            for y in range(HEIGHT):
+                for x in range(WIDTH):
+                    r, g, b = pixels[x, y]
+                    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                    buf.append(rgb565 >> 8)
+                    buf.append(rgb565 & 0xFF)
+                    if len(buf) >= CHUNK:
+                        spi.writebytes(buf)
+                        buf = []
+            if buf:
+                spi.writebytes(buf)
+        finally:
+            GPIO.output(CS, GPIO.HIGH)
 
 
 def close():
