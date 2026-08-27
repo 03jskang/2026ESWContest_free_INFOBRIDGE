@@ -16,6 +16,7 @@ display_module.py
 """
 
 import os
+import time
 
 # LCD로 출력하므로 실제 모니터(HDMI) 없이도 pygame이 동작하도록
 # "화면 없는(headless)" SDL 드라이버를 사용한다.
@@ -62,6 +63,8 @@ RETAKE_BUTTON_RECT = (SCREEN_WIDTH // 2 - 70, SCREEN_HEIGHT - 60, 140, 44)
 
 COLOR_BUTTON = (60, 100, 200)
 COLOR_BUTTON_TEXT = (255, 255, 255)
+PREVIEW_LCD_INTERVAL = 0.25
+_last_preview_lcd_update = 0.0
 
 
 def _draw_button(rect: tuple, label: str):
@@ -247,6 +250,12 @@ def draw_loading_screen(message: str = "인식 중입니다..."):
 
 def draw_camera_preview(frame, message: str = "촬영 중입니다..."):
     """Picamera2 프리뷰 프레임과 촬영 상태를 표시한다."""
+    global _last_preview_lcd_update
+    now = time.monotonic()
+    if now - _last_preview_lcd_update < PREVIEW_LCD_INTERVAL:
+        return
+    _last_preview_lcd_update = now
+
     _screen.fill(COLOR_BG)
 
     if frame is not None:
