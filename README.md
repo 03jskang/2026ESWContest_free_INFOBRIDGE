@@ -143,6 +143,7 @@ LCD_COLOR_ORDER=BGR python3 main.py
 
 기본값을 고정하려면 `ili9486_driver.py`의 `COLOR_ORDER`를 `RGB` 또는 `BGR`로
 설정합니다. 자동 실행 서비스는 `~/.config/info-bridge.env`의 값을 사용합니다.
+LCD가 백라이트만 켜지고 화면이 비어 있으면 `LCD_SPI_SPEED=8000000`을 사용합니다.
 중국어가 깨지면 Raspberry Pi에서 다음 폰트를 설치합니다.
 
 ```bash

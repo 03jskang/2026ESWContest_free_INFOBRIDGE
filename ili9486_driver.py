@@ -11,6 +11,7 @@ RST = 25
 CS = 8
 COLOR_ORDER = os.environ.get("LCD_COLOR_ORDER", "RGB").upper()
 MADCTL_COLOR = 0x28 if COLOR_ORDER == "BGR" else 0x20
+SPI_SPEED_HZ = int(os.environ.get("LCD_SPI_SPEED", "8000000"))
 
 WIDTH = 480
 HEIGHT = 320
@@ -24,8 +25,8 @@ GPIO.output(CS, GPIO.HIGH)
 
 spi = spidev.SpiDev()
 spi.open(0, 0)
-# 프레임 전송 지연을 줄인다. 화면이 깨지거나 불안정하면 8000000으로 낮춘다.
-spi.max_speed_hz = 32000000
+# 일부 ILI9486 보드는 고속 SPI에서 백라이트만 켜지고 화면이 비어 보일 수 있다.
+spi.max_speed_hz = SPI_SPEED_HZ
 spi.mode = 0
 spi.no_cs = True  # 하드웨어 자동 CS 끄고 GPIO로 직접 제어
 

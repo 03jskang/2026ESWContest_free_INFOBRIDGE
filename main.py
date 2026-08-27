@@ -53,8 +53,9 @@ _app_state = "waiting"      # "waiting" | "preview" | "loading" | "result"
 _current_result = None      # AI 인식 결과 dict
 _scroll_offset = 0          # 결과 화면 스크롤 위치 (픽셀)
 _max_scroll = 0              # 스크롤 가능한 최대 픽셀
+_render_requested = threading.Event()
 
-SCROLL_STEP = 20  # 다이얼 한 칸당 스크롤 이동량(픽셀)
+SCROLL_STEP = 40  # 다이얼 한 칸당 스크롤 이동량(픽셀)
 
 
 def _run_capture_pipeline():
@@ -65,6 +66,7 @@ def _run_capture_pipeline():
 
     with _state_lock:
         _app_state = "preview"
+    _render_requested.set()
 
     language_code = get_current_language()
 
@@ -89,6 +91,7 @@ def _run_capture_pipeline():
 
     with _state_lock:
         _app_state = "loading"
+    _render_requested.set()
 
     result = recognize_and_translate(image_path, target_language_code=language_code)
     result["stock_info"] = lookup_stock(result.get("product_name", ""))
@@ -97,6 +100,7 @@ def _run_capture_pipeline():
         _current_result = result
         _app_state = "result"
         _scroll_offset = 0
+    _render_requested.set()
 
 
 def on_button_pressed():
@@ -114,6 +118,7 @@ def on_button_pressed():
     elif current == "result":
         with _state_lock:
             globals()["_app_state"] = "waiting"
+        _render_requested.set()
 
 
 def on_dial_scroll(delta: int):
@@ -123,6 +128,7 @@ def on_dial_scroll(delta: int):
         new_offset = _scroll_offset + delta * SCROLL_STEP
         new_offset = max(0, min(new_offset, _max_scroll))
         _scroll_offset = new_offset
+    _render_requested.set()
     print(
         f"[스크롤] 방향={'아래' if delta > 0 else '위'}, "
         f"위치={new_offset}/{_max_scroll}",
@@ -174,6 +180,7 @@ def main():
         clock = pygame.time.Clock()
         running = True
         last_render_key = None
+        _render_requested.set()
 
         while running:
             button.poll()
@@ -202,7 +209,7 @@ def main():
             else:
                 language_label = get_current_language_label() if current_state == "waiting" else None
                 render_key = (current_state, language_label, id(result), offset)
-                if render_key != last_render_key:
+                if _render_requested.is_set() or render_key != last_render_key:
                     if current_state == "waiting":
                         display.draw_waiting_screen(language_label)
                     elif current_state == "loading":
@@ -212,6 +219,7 @@ def main():
                         visible_height = display.SCREEN_HEIGHT - 64
                         _max_scroll = max(0, total_height - visible_height)
                     last_render_key = render_key
+                    _render_requested.clear()
 
             clock.tick(display.FPS)
     finally:
