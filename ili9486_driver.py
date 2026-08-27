@@ -3,7 +3,6 @@ import os
 import spidev
 import RPi.GPIO as GPIO
 import time
-import numpy as np
 from PIL import Image
 
 DC = 24
@@ -123,21 +122,28 @@ def set_window(x0, y0, x1, y1):
 
 def display_image(img):
     img = img.resize((WIDTH, HEIGHT)).convert("RGB")
-    pixels = np.asarray(img, dtype=np.uint16)
+    pixels = img.load()
     set_window(0, 0, WIDTH - 1, HEIGHT - 1)
 
-    red = (pixels[:, :, 0] & 0xF8) << 8
-    green = (pixels[:, :, 1] & 0xFC) << 3
-    blue = pixels[:, :, 2] >> 3
-    rgb565 = red | green | blue
-    frame_bytes = rgb565.astype(">u2").tobytes()
+    buf = []
     CHUNK = 4000
 
     GPIO.output(CS, GPIO.LOW)
     GPIO.output(DC, GPIO.HIGH)
-    for start in range(0, len(frame_bytes), CHUNK):
-        spi.writebytes(frame_bytes[start:start + CHUNK])
-    GPIO.output(CS, GPIO.HIGH)
+    try:
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                r, g, b = pixels[x, y]
+                rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                buf.append(rgb565 >> 8)
+                buf.append(rgb565 & 0xFF)
+                if len(buf) >= CHUNK:
+                    spi.writebytes(buf)
+                    buf = []
+        if buf:
+            spi.writebytes(buf)
+    finally:
+        GPIO.output(CS, GPIO.HIGH)
 
 
 def close():
