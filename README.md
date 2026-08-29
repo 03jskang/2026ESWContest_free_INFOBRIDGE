@@ -1,151 +1,144 @@
-# Infobridge-team-
- 한경국립대학교 공과 학부연합 개발 준동아리 2번 공모전 작업 공간입니다.  
+# Info-Bridge (인포 브릿지)
 
-[7월: 기획 및 시스템 설계 회의]
+해외 여행객을 위한 온디바이스 비전 AI 기반 독립형 상품 안내 시스템입니다.
+카메라로 상품을 촬영하면 상품명·카테고리·라벨 성분 요약·사용법·항공 반입 규정을
+사용자가 선택한 언어로 안내하고, 매장 재고(CSV)와 매칭해 위치·가격 정보도 함께 보여줍니다.
 
-7월 1주차: 프로젝트 킥오프 및 기획 회의
-해외 여행객을 위한 AI 기반 정보 안내 디바이스 '인포 브릿지' 개발 목표 및 필요성 확립
+라즈베리파이 4B + Google Gemini API를 결합해, 별도 앱 설치 없이 전원만 켜면
+바로 쓸 수 있는 휴대형 Standalone 디바이스로 설계했습니다.
 
-7월 2주차: 개발 환경 선정 및 시스템 구성 논의
-Raspberry Pi 4B 및 Python 3 기반의 임베디드 소프트웨어 개발 환경 확정
-입력 처리, 촬영, AI 연동, 번역, 화면 출력 등 5가지 주요 시스템 구성 모듈 구조 논의
+## 팀 정보
 
-7월 3주차: 동작 흐름 설계 및 라이브러리 검토
-상태 머신(state machine) 구조를 활용한 전체 동작 흐름 설계
-카메라 제어용 picamera 2, LCD 출력용 pygame, 엔코더 입력용 gpio zero 라이브러리 적용 검토
+- 팀명: 인포브릿지
+- 팀장: 강주성 — 개발 총괄, SW 구축
+- 팀원: 서하진 — 3D 모델링, 아날로그 설비
+- 팀원: 김동민 — 3D 모델링 보조, 문서 작성 보조
+- 팀원: 조범근 — SW 구축 및 OS 초기 구성
+- 팀원: 이민주 — SW 개발 보조, 문서 작성
 
-7월 4주차: 담당 업무 세분화 및 개발 계획 확정
-팀장 강주성(개발 총괄, 펌웨어 구축), 팀원 조범근(펌웨어 구축), 김동민(SW 개발 보조)의 소프트웨어 업무 구체화
-팀원 서하진(3D 모델링, 아날로그 설비), 이민주(SW개발 보조, 아날로그 설비)의 하드웨어 및 외관 설계 업무 구체화
+## 하드웨어 구성
 
-[8월: 모듈 구현 및 하드웨어/소프트웨어 통합 개발]
+- Raspberry Pi 4B (4GB)
+- 5MP MIPI 카메라
+- 3.5인치 SPI LCD, 480×320, ILI9486 컨트롤러
+- 로터리 엔코더(푸시 버튼 내장)
 
-8월 1주차: 하드웨어 초기화 및 모델링 작업
-하드웨어(LCD, 카메라, GPIO) 초기화 및 전원 대기 상태 로직 구현
-독립형 임베디드 디바이스 제작을 위한 3D 모델링 및 아날로그 설비 진행
+## 소프트웨어 환경
 
-8월 2주차: 입출력 및 촬영 모듈 개발
-로터리 엔코더와 버튼 클릭을 인터럽트 방식으로 감지하는 입력 처리 모듈 구현
-5MP 카메라 모듈을 통한 촬영 및 이미지 리사이즈/크롭 전처리 로직 구현
-3.5인치 LCD(480x320)에 정보를 스크롤하고 표시하는 화면 출력 모듈 구현
-->api 넘기는 것은 구현 완료했지만 촬영 preview 구현해야 함. 
+- Raspberry Pi OS (Bookworm, 64-bit) / Python 3
+- 주요 라이브러리: `picamera2`, `pygame`, `RPi.GPIO`, `google-genai`, `spidev`
 
-카메라 프리뷰는 LCD에 실시간으로 표시하고, 프리뷰 종료 시 마지막 정지 이미지를
-Gemini에 전송합니다. 영상 자체를 Gemini에 보내는 것이 아니라 상품 분석에 필요한
-한 장의 사진을 보내는 구조입니다.
+## 설치
 
-8월 3주차: 외부 AI 서버 통신 및 번역 모듈 통합
-requests 모듈을 이용해 외부 AI 서버(Vision/OCR API)로 이미지를 전송하고 텍스트 및 부가 정보를 조회하는 AI 연동 모듈 개발
-AI 서버 결과를 바탕으로 성분 및 규정 등의 정보를 번역하는 모듈 통합
-08/23~ 개선 및 기능 추가
+```bash
+git clone https://github.com/03jskang/2026ESWContest_free_INFOBRIDGE.git
+cd 2026ESWContest_free_INFOBRIDGE
+pip install picamera2 pygame RPi.GPIO google-genai spidev
+```
 
-8월 4주차: 예외 처리, 디버깅 및 최종 테스트
-Wi-Fi 연결 끊김 및 AI 서버 응답 지연에 대비한 타임아웃, 재시도 로직 등 예외 처리 구현
-촬영, 번역, 재 촬영으로 이어지는 순환 구조 테스트 및 트러블 슈팅을 통한 최종 마감
+## Gemini API 키 설정
 
+`ai_module.py`는 `GEMINI_API_KEY` 환경변수가 없으면 즉시 오류를 내며 종료합니다.
+아래 방법 중 하나로 먼저 설정하세요.
 
-=======
-//
-앞으로 해야할 것
+**일회성 (터미널 세션에서만 유효)**
 
-하드웨어
+```bash
+export GEMINI_API_KEY="여기에_발급받은_키_입력"
+```
 
-1. 로터리 엔코더 납 땜 및 배선
-2. 터치 방식 기능 구현
+**영구 설정**
 
-소프트웨어
+```bash
+echo 'export GEMINI_API_KEY="키값"' >> ~/.bashrc
+source ~/.bashrc
+```
 
-1. csv(데이터 파일)로 재고 등 매장 혹은 사업장 db는 임시 파일로 만들어서 설명할 수 있게 해야함.
-상품 인식 및 수하물 관련 정보는 gemni api가 판단. 
-2. git issue에 플로우 차트 및 개발 시 발생했던 어려움들  docs에 기록
+**자동 실행(systemd)으로 등록한 경우** — 아래 파일에 키를 넣으면 서비스가 자동으로 읽습니다.
 
+```
+~/.config/info-bridge.env
+```
 
-추가적 구현 :
-카메라가 촬영 버튼을 누르면 preview로 카메라가 인식하고 있는지 볼 수 있게 함.
->>>>>>> b21c63c (Revise README with project updates and next steps)
+## 실행
 
-문서 반영 및 수정 사항 : 
-제출용 엑셀 인적사항 반영하기.
+```bash
+python main.py
+```
 
-## CSV 상품 데이터
+엔코더 하드웨어가 아직 준비되지 않았다면, 키보드로도 동일하게 조작할 수 있습니다.
 
-`inventory.csv`는 다음 열을 사용합니다.
+| 키 | 동작 |
+|---|---|
+| ← / → | 엔코더 반시계 / 시계 방향 회전과 동일 (언어 선택 또는 결과 화면 스크롤) |
+| Space | 버튼 클릭과 동일 (촬영 시작 또는 대기 화면 복귀) |
 
-현재 `convenience_store_inventory.csv`는 다음 열을 사용합니다.
-
-`product_id,product_name,category,price,stock_quantity,location,event_type`
-
-Gemini가 인식한 상품명과 `product_name`을 비교해 일치하는 행을 찾고, 매장/재고/
-위치/설명을 결과 화면에 표시합니다. 다른 파일을 사용하려면 Raspberry Pi에서
-`INVENTORY_CSV=/경로/파일.csv python3 main.py`처럼 실행합니다.
-
-## Raspberry Pi 부팅 자동 실행
-
-Raspberry Pi에서 프로젝트 폴더로 이동한 뒤 다음 명령을 한 번 실행합니다.
+## 부팅 시 자동 실행 설정
 
 ```bash
 sudo bash install_autostart.sh
 ```
 
-그러면 전원이 켜지고 네트워크가 준비된 뒤 `main.py`가 자동 실행되어 LCD가
-초기화됩니다. Gemini API 키는 서비스 사용자 기준으로 생성된 파일에 저장합니다.
-
-카메라 영상은 상하 반전 상태로 표시하고, Gemini에 보내는 촬영 이미지에도 같은
-반전을 적용합니다. 방향을 원래대로 바꾸려면 `capture_module.py`의
-`FLIP_CAMERA_VERTICAL = False`로 설정합니다.
-
-처음 설치할 때는 서비스 사용자가 GPIO와 카메라 장치에 접근할 수 있도록 다음도
-한 번 실행합니다.
+systemd 서비스(`info-bridge.service`)로 등록되어 전원이 켜지면 `main.py`가 자동 실행됩니다.
 
 ```bash
-sudo usermod -aG gpio,video $USER
-```
-
-그 후 Raspberry Pi를 재부팅하면 LCD 대기 화면이 자동으로 표시됩니다.
-
-```bash
-nano ~/.config/info-bridge.env
-GEMINI_API_KEY=발급받은_키
-GEMINI_TIMEOUT_MS=60000
-# 비워두면 API 키에서 사용 가능한 Flash 모델을 자동 선택
-GEMINI_MODEL=
-# 패널에 따라 RGB 또는 BGR 선택
-LCD_COLOR_ORDER=BGR
-```
-
-Gemini 응답이 지연되면 60초 후 1회 재시도하고, 계속 실패하면 네트워크
-오류 안내를 결과 화면에 표시합니다. `GEMINI_TIMEOUT_MS` 값으로 제한시간을
-조절할 수 있습니다.
-
-서비스 확인 및 로그:
-
-```bash
+# 서비스 상태 확인
 sudo systemctl status info-bridge.service
+
+# 실시간 로그 확인
 sudo journalctl -u info-bridge.service -f
 ```
 
-서비스를 중지하려면 `sudo systemctl disable --now info-bridge.service`를 실행합니다.
+## 동작 흐름 (상태 머신)
 
-## 색상 및 중국어 폰트
-
-LCD의 패널에 따라 RGB/BGR 색상 순서가 다릅니다. 현재 기본값은 RGB입니다. 화면이
-파랗게 보이거나 빨강과 파랑이 뒤바뀌면 Raspberry Pi에서 다음처럼 BGR로 실행해
-비교합니다.
-
-```bash
-LCD_COLOR_ORDER=BGR python3 main.py
+```
+전원 ON / 초기화
+   ↓
+대기 화면 (엔코더로 언어 선택)
+   ↓ 버튼 클릭
+촬영 및 프리뷰 (2초 프리뷰 후 정지 이미지 촬영)
+   ↓
+AI 인식 및 번역 (Gemini API 호출 + 매장 재고 매칭)
+   ↓
+결과 표시 (엔코더로 스크롤)
+   ↓ 버튼 클릭
+대기 화면으로 복귀
 ```
 
-기본값을 고정하려면 `ili9486_driver.py`의 `COLOR_ORDER`를 `RGB` 또는 `BGR`로
-설정합니다. 자동 실행 서비스는 `~/.config/info-bridge.env`의 값을 사용합니다.
-LCD가 백라이트만 켜지고 화면이 비어 있으면 `LCD_SPI_SPEED=8000000`을 사용합니다.
-중국어가 깨지면 Raspberry Pi에서 다음 폰트를 설치합니다.
+## 파일 구성
 
-```bash
-sudo apt update
-sudo apt install -y fonts-noto-cjk
-sudo systemctl restart info-bridge.service
-```
+| 파일 | 역할 |
+|---|---|
+| `main.py` | 전체 상태(`waiting`/`preview`/`loading`/`result`) 관리 및 각 모듈 호출 |
+| `input_module.py` | 로터리 엔코더 회전/버튼 클릭 감지 (폴링 방식) |
+| `capture_module.py` | 카메라 프리뷰 표시, 정지 이미지 촬영 및 전처리 |
+| `ai_module.py` | Gemini API 호출을 통한 상품 인식·번역 |
+| `inventory_module.py` | 인식된 상품명과 CSV 매장 데이터 매칭 |
+| `display_module.py` | pygame 기반 화면 렌더링 |
+| `ili9486_driver.py` | SPI/GPIO 제어를 통한 LCD 저수준 출력 |
+| `install_autostart.sh` | 부팅 시 자동 실행용 systemd 서비스 등록 스크립트 |
+| `test_camera.py` | 카메라 단독 동작 테스트용 스크립트 |
+| `convenience_store_inventory.csv` | 매장 재고 데이터 (기본값) |
+| `retail_product_inventory_large.csv` | 매장 재고 데이터 (대용량 샘플) |
 
+## 환경변수로 조정 가능한 값
 
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `GEMINI_API_KEY` | (필수) | Gemini API 키 |
+| `GEMINI_MODEL` | - | 사용할 Gemini 모델명 |
+| `GEMINI_TIMEOUT_MS` | 60000 | API 응답 타임아웃(ms) |
+| `LCD_SPI_SPEED` | 8000000 | LCD SPI 통신 속도(Hz). 화면이 불안정하면 낮춰서 조정 |
+| `LCD_COLOR_ORDER` | RGB | 색상이 반전되어 보이면 `BGR`로 변경 |
+| `INVENTORY_CSV` | `convenience_store_inventory.csv` | 매장 재고 CSV 파일 경로 교체 |
 
+## 예외 처리
+
+- Wi-Fi/네트워크 오류: 요청 전 서버 연결을 사전 확인하고, 실패 시 지수 백오프로 재시도
+- Gemini API 오류: 401/403/404/429 등 에러 코드별 안내 메시지 분기, 모델 후보 순회(fallback)
+- JSON 파싱 실패: 원본 응답 텍스트를 화면에 그대로 표시하여 프로그램이 중단되지 않도록 처리
+- 카메라 예외: 발생 시 카메라 자원을 정리하고 오류 안내 화면 표시
+
+## 시연 영상
+
+<!-- 유튜브 링크를 여기에 추가하세요 -->
