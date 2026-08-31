@@ -141,4 +141,4 @@ AI 인식 및 번역 (Gemini API 호출 + 매장 재고 매칭)
 
 ## 시연 영상
 
-<!-- 유튜브 링크를 여기에 추가하세요 -->
+https://www.youtube.com/watch?v=osyiTrapm9k&feature=youtu.be
